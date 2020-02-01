@@ -253,10 +253,10 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "1"}, {2, "2"}, {3, "3"}]
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
       iex> {:ok, graph} = InductiveGraph.make_graph(vertices, [])
       iex> graph |> InductiveGraph.list_vertices() |> Enum.sort()
-      [{1, "1"}, {2, "2"}, {3, "3"}]
+      [{1, "a"}, {2, "b"}, {3, "c"}]
 
   """
   @spec list_vertices(t) :: [{vertex, label}]
@@ -267,5 +267,42 @@ defmodule InductiveGraph do
     map
     |> Map.to_list()
     |> Enum.map(format)
+  end
+
+  @doc """
+  Counts the number of vertices in graph.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, [])
+      iex> InductiveGraph.count_vertices(graph)
+      3
+
+  """
+  @spec count_vertices(t) :: non_neg_integer
+  def count_vertices(%Graph{internal: map}) do
+    map_size(map)
+  end
+
+  @doc """
+  Lists all edges in graph.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> graph |> InductiveGraph.list_edges() |> Enum.sort()
+      [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+
+  """
+  @spec list_edges(t) :: [{vertex, vertex, label}]
+  def list_edges(%Graph{internal: map}) do
+    for {source, {_predecessors, _label, successors}} <- Map.to_list(map),
+        {target, labels} <- Map.to_list(successors),
+        label <- labels do
+      {source, target, label}
+    end
   end
 end
