@@ -1,6 +1,7 @@
 defmodule InductiveGraph do
   @moduledoc """
-  Documentation for InductiveGraph.
+  `InductiveGraph` implements graph functionality using an inductive defintion
+  for graphs.
   """
 
   alias InductiveGraph, as: Graph
@@ -230,7 +231,7 @@ defmodule InductiveGraph do
     end
   end
 
-  # Removes vertex from internal context's predcessors or successors field for
+  # Removes vertex from internal context's predecessors or successors field for
   # every target vertex.
   @spec remove_vertex_from_internal_adjacents(igraph, vertex, [vertex], :predecessors | :successors) :: igraph
   defp remove_vertex_from_internal_adjacents(map, vertex, target_vertices, adjacents_type)
