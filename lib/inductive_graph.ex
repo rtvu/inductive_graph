@@ -157,8 +157,8 @@ defmodule InductiveGraph do
   def insert_edge(%Graph{internal: map}, {source, target, label}) do
     with {:ok, source_context} <- Map.fetch(map, source),
          {:ok, target_context} <- Map.fetch(map, target),
-         updated_source_context <- update_internal_context(source_context, {target, label}, :successors),
-         updated_target_context <- update_internal_context(target_context, {source, label}, :predecessors) do
+         updated_source_context <- update_internal_context(source_context, {target, [label]}, :successors),
+         updated_target_context <- update_internal_context(target_context, {source, [label]}, :predecessors) do
       {:ok, %Graph{internal: %{map | source => updated_source_context, target => updated_target_context}}}
     else
       _error -> :error
@@ -166,18 +166,24 @@ defmodule InductiveGraph do
   end
 
   # Updates an element within internal context.
-  @spec update_internal_context(icontext, label, :predecessors | :label | :successors) :: icontext
+  @spec update_internal_context(icontext, term, :predecessors | :label | :successors) :: icontext
   defp update_internal_context(context, value, location)
   defp update_internal_context({predecessors, _label, successors}, label, :label) do
     {predecessors, label, successors}
   end
-  defp update_internal_context({predecessors, label, successors}, {target, target_label}, :successors) do
-    successors = Map.update(successors, target, [target_label], &Enum.concat(&1, [target_label]))
+  defp update_internal_context({predecessors, label, successors}, {target, target_labels}, :successors) do
+    successors = update_internal_adjacents(successors, target, target_labels)
     {predecessors, label, successors}
   end
-  defp update_internal_context({predecessors, label, successors}, {source, source_label}, :predecessors) do
-    predecessors = Map.update(predecessors, source, [source_label], &Enum.concat(&1, [source_label]))
+  defp update_internal_context({predecessors, label, successors}, {source, source_labels}, :predecessors) do
+    predecessors = update_internal_adjacents(predecessors, source, source_labels)
     {predecessors, label, successors}
+  end
+
+  # Updates internal adjacent with a new edge.
+  @spec update_internal_adjacents(iadj, vertex, label) :: iadj
+  defp update_internal_adjacents(internal_adjacents, vertex, labels) do
+      Map.update(internal_adjacents, vertex, labels, &Enum.concat(&1, labels))
   end
 
   @doc """
