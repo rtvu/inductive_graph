@@ -156,11 +156,23 @@ defmodule InductiveGraph do
   @spec insert_edge(t, {vertex, vertex, label}) :: {:ok, t} | :error
   def insert_edge(graph, edge)
   def insert_edge(%Graph{internal: map}, {source, target, label}) do
-    with {:ok, source_context} <- Map.fetch(map, source),
-         {:ok, target_context} <- Map.fetch(map, target),
-         updated_source_context <- update_internal_context(source_context, {target, [label]}, :successors),
-         updated_target_context <- update_internal_context(target_context, {source, [label]}, :predecessors) do
-      {:ok, %Graph{internal: %{map | source => updated_source_context, target => updated_target_context}}}
+    with {:ok, map} <- update_internal_map(map, source, {target, [label]}, :successors),
+         {:ok, map} <- update_internal_map(map, target, {source, [label]}, :predecessors) do
+      {:ok, %Graph{internal: map}}
+    else
+      _error -> :error
+    end
+  end
+
+  # Updates a vertex's internal context.
+  @spec update_internal_map(map, vertex, term, :predecessors | :label | :successors | :context) :: {:ok, map} | :error
+  defp update_internal_map(map, vertex, value, location)
+  defp update_internal_map(map, vertex, value, :context), do: {:ok, Map.put(map, vertex, value)}
+  defp update_internal_map(map, vertex, value, location) do
+    with {:ok, context} <- Map.fetch(map, vertex) do
+      context = update_internal_context(context, value, location)
+      map = Map.put(map, vertex, context)
+      {:ok, map}
     else
       _error -> :error
     end
