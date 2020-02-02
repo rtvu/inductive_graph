@@ -363,4 +363,71 @@ defmodule InductiveGraph do
       {source, target, label}
     end
   end
+
+  @doc """
+  Checks if two graphs are equal.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph1} = InductiveGraph.make_graph(vertices, [])
+      iex> {:ok, graph2} = InductiveGraph.insert_edges(graph1, edges)
+      iex> {:ok, graph3} = InductiveGraph.make_graph(vertices, edges)
+      iex> InductiveGraph.equal?(graph1, graph2)
+      false
+      iex> InductiveGraph.equal?(graph2, graph3)
+      true
+
+  """
+  @spec equal?(t, t) :: boolean
+  def equal?(graph1, graph2) do
+    vertices1 = graph1 |> InductiveGraph.list_vertices() |> Enum.sort()
+    edges1 = graph1 |> InductiveGraph.list_edges() |> Enum.sort()
+    vertices2 = graph2 |> InductiveGraph.list_vertices() |> Enum.sort()
+    edges2 = graph2 |> InductiveGraph.list_edges() |> Enum.sort()
+    (vertices1 == vertices2) and (edges1 == edges2)
+  end
+
+  @doc """
+  Updates graph by joining with a context.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph1} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, context, graph2} = InductiveGraph.decompose_by_vertex(graph1, 3)
+      iex> {:ok, graph3} = InductiveGraph.compose_context(graph2, context)
+      iex> InductiveGraph.equal?(graph1, graph3)
+      true
+
+  """
+  @spec compose_context(t, context) :: {:ok, t} | :error
+  def compose_context(graph, context)
+  def compose_context(%Graph{internal: map}, {predecessors, vertex, label, successors}) do
+    internal_predecessors = convert_to_internal_adjacents(predecessors)
+    internal_successors = convert_to_internal_adjacents(successors)
+    map = Map.put(map, vertex, {internal_predecessors, label, internal_successors})
+
+    update =
+      fn
+        {adjacent_vertex, labels}, {:ok, map}, location -> update_internal_map(map, adjacent_vertex, {vertex, labels}, location)
+        _adjacents, :error, _location -> :error
+      end
+
+    with {:ok, map} <- List.foldl(Map.to_list(internal_predecessors), {:ok, map}, &update.(&1, &2, :successors)),
+         {:ok, map} <- List.foldl(Map.to_list(internal_successors), {:ok, map}, &update.(&1, &2, :predecessors)) do
+      {:ok, %Graph{internal: map}}
+    else
+      _error -> :error
+    end
+  end
+
+  # Converts adjacents to internal adjacents.
+  @spec convert_to_internal_adjacents(adj) :: iadj
+  defp convert_to_internal_adjacents(adjacents) do
+    convert = fn {label, vertex}, internal_adjacents -> update_internal_adjacents(internal_adjacents, vertex, [label]) end
+    List.foldl(adjacents, %{}, convert)
+  end
 end
