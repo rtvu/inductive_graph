@@ -344,6 +344,51 @@ defmodule InductiveGraph do
   end
 
   @doc """
+  Gets range of vertices.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, [])
+      iex> InductiveGraph.vertex_range(graph)
+      {:ok, 1, 3}
+
+  """
+  @spec vertex_range(t) :: {:ok, min :: integer, max :: integer} | :error
+  def vertex_range(%Graph{internal: map}) do
+    case Map.keys(map) do
+      [] ->
+        :error
+      [vertex | vertices] ->
+        min_max = fn vertex, {minimum, maximum} -> {min(minimum, vertex), max(maximum, vertex)} end
+        {minimum, maximum} = List.foldl(vertices, {vertex, vertex}, min_max)
+        {:ok, minimum, maximum}
+    end
+  end
+
+  @doc """
+  Inserts vertex into graph.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.insert_vertex(graph, {4, "d"})
+      iex> {:ok, context, _graph} = InductiveGraph.decompose_by_vertex(graph, 4)
+      iex> context
+      {[], 4, "d", []}
+
+  """
+  @spec insert_vertex(t, {vertex, label}) :: {:ok, t} | :error
+  def insert_vertex(%Graph{internal: map}, {vertex, label}) do
+    case Map.has_key?(map, vertex) do
+      true -> :error
+      false -> {:ok, %Graph{internal: Map.put(map, vertex, {%{}, label, %{}})}}
+    end
+  end
+
+  @doc """
   Lists all edges in graph.
 
   ## Examples
