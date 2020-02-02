@@ -56,6 +56,40 @@ defmodule InductiveGraph do
     end
   end
 
+  @doc ~S"""
+  Pretty prints inductive representation of graph.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> InductiveGraph.pretty_print(graph) <> "\n"
+      ~s'''
+      | {[{"down", 2}], 3, "c", [{"up", 1}]}
+      & {[{"right", 1}], 2, "b", [{"left", 1}]}
+      & {[], 1, "a", []}
+      & Empty
+      '''
+
+  """
+  @spec pretty_print(t) :: String.t
+  def pretty_print(graph)
+  def pretty_print(graph = %Graph{internal: map}) do
+    vertices = map |> Map.keys() |> Enum.sort() |> Enum.reverse()
+    pretty_print(graph, vertices, "| ")
+  end
+
+  # Pretty prints inductive representation of graph.
+  @spec pretty_print(t, [vertex], String.t) :: String.t
+  defp pretty_print(graph, vertices, result)
+  defp pretty_print(_graph, [], result), do: result <> "Empty"
+  defp pretty_print(graph, [vertex | vertices], result) do
+    {:ok, context, graph} = decompose_by_vertex(graph, vertex)
+    result = result <> inspect(context) <> "\n& "
+    pretty_print(graph, vertices, result)
+  end
+
   @doc """
   Creates an empty inductive graph.
 
