@@ -91,19 +91,21 @@ defmodule InductiveGraph do
   end
 
   @doc """
-  Creates an empty inductive graph.
+  Creates an empty graph.
 
   ## Examples
 
-      iex> InductiveGraph.new()
+      iex> graph = InductiveGraph.new()
       #InductiveGraph<>
+      iex> InductiveGraph.pretty_print(graph)
+      "| Empty"
 
   """
   @spec new() :: t
   def new(), do: %Graph{}
 
   @doc """
-  Determines if the inductive graph is empty.
+  Determines if graph is empty.
 
   ## Examples
 
@@ -129,17 +131,10 @@ defmodule InductiveGraph do
       iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
       iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
       iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> {:ok, context1, graph} = InductiveGraph.decompose_by_vertex(graph, 3)
-      iex> context1
-      {[{"down", 2}], 3, "c", [{"up", 1}]}
-      iex> {:ok, context2, graph} = InductiveGraph.decompose_by_vertex(graph, 2)
-      iex> context2
-      {[{"right", 1}], 2, "b", [{"left", 1}]}
-      iex> {:ok, context3, graph} = InductiveGraph.decompose_by_vertex(graph, 1)
-      iex> context3
-      {[], 1, "a", []}
-      iex> InductiveGraph.empty?(graph)
-      true
+      iex> InductiveGraph.list_vertices(graph) |> Enum.sort()
+      [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> InductiveGraph.list_edges(graph) |> Enum.sort()
+      [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
 
   """
   @spec make_graph([{vertex, label}], [{vertex, vertex, label}]) :: {:ok, t} | :error
@@ -154,15 +149,20 @@ defmodule InductiveGraph do
     |> insert_edges(edges)
   end
 
-  @doc """
+  @doc ~S"""
   Inserts edges into graph.
-
-  TODO: Examples need other functions to be defined first.
 
   ## Examples
 
-      iex> InductiveGraph.new()
-      #InductiveGraph<>
+      iex> {:ok, graph} = InductiveGraph.make_graph([{1, 1}, {2, 2}, {3, 3}], [])
+      iex> {:ok, graph} = InductiveGraph.insert_edges(graph, [{1, 2,"right"}, {3, 2, "left"}])
+      iex> InductiveGraph.pretty_print(graph) <> "\n"
+      ~s'''
+      | {[], 3, 3, [{"left", 2}]}
+      & {[{"right", 1}], 2, 2, []}
+      & {[], 1, 1, []}
+      & Empty
+      '''
 
   """
   @spec insert_edges(t, [{vertex, vertex, label}]) :: {:ok, t} | :error
@@ -176,15 +176,20 @@ defmodule InductiveGraph do
     List.foldl(edges, {:ok, graph}, insert)
   end
 
-  @doc """
+  @doc ~S"""
   Inserts an edge into graph.
-
-  TODO: Examples need other functions to be defined first.
 
   ## Examples
 
-      iex> InductiveGraph.new()
-      #InductiveGraph<>
+      iex> {:ok, graph} = InductiveGraph.make_graph([{1, 1}, {2, 2}, {3, 3}], [{1, 2, "right"}])
+      iex> {:ok, graph} = InductiveGraph.insert_edge(graph, {3, 2, "left"})
+      iex> InductiveGraph.pretty_print(graph) <> "\n"
+      ~s'''
+      | {[], 3, 3, [{"left", 2}]}
+      & {[{"right", 1}], 2, 2, []}
+      & {[], 1, 1, []}
+      & Empty
+      '''
 
   """
   @spec insert_edge(t, {vertex, vertex, label}) :: {:ok, t} | :error
