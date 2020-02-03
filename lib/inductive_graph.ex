@@ -73,21 +73,22 @@ defmodule InductiveGraph do
       '''
 
   """
-  @spec pretty_print(t) :: String.t
-  def pretty_print(graph)
-  def pretty_print(graph = %Graph{internal: map}) do
+  @spec pretty_print(t, integer) :: String.t
+  def pretty_print(graph, count \\ -1)
+  def pretty_print(graph = %Graph{internal: map}, count) do
     vertices = map |> Map.keys() |> Enum.sort() |> Enum.reverse()
-    pretty_print(graph, vertices, "| ")
+    pretty_print(graph, vertices, count, "| ")
   end
 
   # Pretty prints inductive representation of graph.
-  @spec pretty_print(t, [vertex], String.t) :: String.t
-  defp pretty_print(graph, vertices, result)
-  defp pretty_print(_graph, [], result), do: result <> "Empty"
-  defp pretty_print(graph, [vertex | vertices], result) do
+  @spec pretty_print(t, [vertex], integer, String.t) :: String.t
+  defp pretty_print(graph, vertices, count, result)
+  defp pretty_print(_graph, [], _count, result), do: result <> "Empty"
+  defp pretty_print(_graph, _vertices, 0, result), do: result <> "InductiveGraph"
+  defp pretty_print(graph, [vertex | vertices], count, result) do
     {:ok, context, graph} = decompose_by_vertex(graph, vertex)
     result = result <> inspect(context) <> "\n& "
-    pretty_print(graph, vertices, result)
+    pretty_print(graph, vertices, count - 1, result)
   end
 
   @doc """
