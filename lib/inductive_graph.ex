@@ -1,53 +1,22 @@
 defmodule InductiveGraph do
   @moduledoc """
-  `InductiveGraph` implements graph functionality using an inductive defintion
-  for graphs.
+  Functions that work on graphs as an inductive data structure.
   """
 
   alias InductiveGraph, as: Graph
+  alias InductiveGraph.Internal
+  alias InductiveGraph.Utilities
 
-  @typedoc """
-  Inductive graph
-  """
   @opaque t :: %__MODULE__{}
-  @typedoc """
-  Label
-  """
-  @type label :: term
-  @typedoc """
-  Vertex
-  """
+  @type value :: term
   @type vertex :: integer
-  @typedoc """
-  Adjacents
-  """
-  @type adj :: [{label, vertex}]
-  @typedoc """
-  Predecessors
-  """
-  @type pred :: adj
-  @typedoc """
-  Successors
-  """
-  @type succ :: adj
-  @typedoc """
-  Context
-  """
-  @type context :: {pred, vertex, label, succ}
-
-  # Internal adjacents
-  @typep iadj :: %{required(vertex) => [label]}
-  # Internal predecessors
-  @typep ipreds :: iadj
-  # Internal successors
-  @typep isuccs :: iadj
-  # Internal context
-  @typep icontext :: {ipreds, label, isuccs}
-  # Internal graph
-  @typep igraph :: %{required(vertex) => icontext}
+  @type tagged_vertex :: {vertex, value}
+  @type tagged_edge :: {from_vertex :: vertex, to_vertex :: vertex, value}
+  @type adjacents :: [{value, vertex}]
+  @type context :: {predecessors :: adjacents, vertex, value, successors :: adjacents}
 
   defstruct [
-    internal: %{},
+    internal: Internal.empty_graph(),
   ]
 
   defimpl Inspect do
@@ -56,8 +25,27 @@ defmodule InductiveGraph do
     end
   end
 
+  # Wraps `graph` to `%InductiveGraph{}`.
+  @spec wrap(Internal.t) :: t
+  defp wrap(graph), do: %Graph{internal: graph}
+
+  # Wraps `graph` in `position` of `fallible` to `%InductiveGraph{}`.
+  #
+  # Fallible is either `:error` or an n-tuple with first element `:ok`.
+  @spec wrap_fallible(tuple | :error, non_neg_integer) :: tuple | :error
+  defp wrap_fallible(fallible, position) do
+    with true <- is_tuple(fallible),
+         :ok <- elem(fallible, 0) do
+      Utilities.tuple_update_position!(fallible, position, &wrap/1)
+    else
+      _error -> :error
+    end
+  end
+
   @doc ~S"""
-  Pretty prints inductive representation of graph.
+  Pretty prints inductive representation of `graph`.
+
+  If `count` is provided, then up to `count` number of contexts will be shown.
 
   ## Examples
 
@@ -75,20 +63,8 @@ defmodule InductiveGraph do
   """
   @spec pretty_print(t, integer) :: String.t
   def pretty_print(graph, count \\ -1)
-  def pretty_print(graph = %Graph{internal: map}, count) do
-    vertices = map |> Map.keys() |> Enum.sort() |> Enum.reverse()
-    pretty_print(graph, vertices, count, "| ")
-  end
-
-  # Pretty prints inductive representation of graph.
-  @spec pretty_print(t, [vertex], integer, String.t) :: String.t
-  defp pretty_print(graph, vertices, count, result)
-  defp pretty_print(_graph, [], _count, result), do: result <> "Empty"
-  defp pretty_print(_graph, _vertices, 0, result), do: result <> "InductiveGraph"
-  defp pretty_print(graph, [vertex | vertices], count, result) do
-    {:ok, context, graph} = decompose_by_vertex(graph, vertex)
-    result = result <> inspect(context) <> "\n& "
-    pretty_print(graph, vertices, count - 1, result)
+  def pretty_print(%Graph{internal: graph}, count) do
+    Internal.pretty_print(graph, count)
   end
 
   @doc """
@@ -96,21 +72,21 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> graph = InductiveGraph.new()
+      iex> graph = InductiveGraph.empty_graph()
       #InductiveGraph<>
       iex> InductiveGraph.pretty_print(graph)
       "| Empty"
 
   """
-  @spec new() :: t
-  def new(), do: %Graph{}
+  @spec empty_graph() :: t
+  def empty_graph(), do: %Graph{}
 
   @doc """
-  Determines if graph is empty.
+  Determines if `graph` is empty.
 
   ## Examples
 
-      iex> graph = InductiveGraph.new()
+      iex> graph = InductiveGraph.empty_graph()
       iex> InductiveGraph.empty?(graph)
       true
       iex> {:ok, graph} = InductiveGraph.make_graph([{1, 1}], [])
@@ -120,12 +96,10 @@ defmodule InductiveGraph do
   """
   @spec empty?(t) :: boolean
   def empty?(graph)
-  def empty?(%Graph{internal: map = %{}}) do
-    map == %{}
-  end
+  def empty?(%Graph{internal: graph}), do: Internal.empty?(graph)
 
   @doc """
-  Builds a graph from a list of vertices and edges.
+  Creates a graph from lists `vertices` and `edges`.
 
   ## Examples
 
@@ -138,20 +112,14 @@ defmodule InductiveGraph do
       [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
 
   """
-  @spec make_graph([{vertex, label}], [{vertex, vertex, label}]) :: {:ok, t} | :error
+  @spec make_graph([tagged_vertex], [tagged_edge]) :: {:ok, t} | :error
   def make_graph(vertices, edges) do
-    transform_vertex = fn {vertex, label} -> {vertex, {%{}, label, %{}}} end
-    wrap_map = fn map -> %Graph{internal: map} end
-
-    vertices
-    |> Stream.map(transform_vertex)
-    |> Map.new()
-    |> wrap_map.()
-    |> insert_edges(edges)
+    Internal.make_graph(vertices, edges)
+    |> wrap_fallible(1)
   end
 
   @doc ~S"""
-  Inserts edges into graph.
+  Inserts `edges` into `graph`.
 
   ## Examples
 
@@ -166,19 +134,15 @@ defmodule InductiveGraph do
       '''
 
   """
-  @spec insert_edges(t, [{vertex, vertex, label}]) :: {:ok, t} | :error
-  def insert_edges(graph, edges) do
-    insert =
-      fn
-        edge, {:ok, graph} -> insert_edge(graph, edge)
-        _edge, :error -> :error
-      end
-
-    List.foldl(edges, {:ok, graph}, insert)
+  @spec insert_edges(t, [tagged_edge]) :: {:ok, t} | :error
+  def insert_edges(graph, edges)
+  def insert_edges(%Graph{internal: graph}, edges) do
+    Internal.insert_edges(graph, edges)
+    |> wrap_fallible(1)
   end
 
   @doc ~S"""
-  Inserts an edge into graph.
+  Inserts `edge` into `graph`.
 
   ## Examples
 
@@ -193,122 +157,44 @@ defmodule InductiveGraph do
       '''
 
   """
-  @spec insert_edge(t, {vertex, vertex, label}) :: {:ok, t} | :error
+  @spec insert_edge(t, tagged_edge) :: {:ok, t} | :error
   def insert_edge(graph, edge)
-  def insert_edge(%Graph{internal: map}, {source, target, label}) do
-    with {:ok, map} <- update_internal_map(map, source, {target, [label]}, :successors),
-         {:ok, map} <- update_internal_map(map, target, {source, [label]}, :predecessors) do
-      {:ok, %Graph{internal: map}}
-    else
-      _error -> :error
-    end
-  end
-
-  # Updates a vertex's internal context.
-  @spec update_internal_map(map, vertex, term, :predecessors | :label | :successors | :context) :: {:ok, map} | :error
-  defp update_internal_map(map, vertex, value, location)
-  defp update_internal_map(map, vertex, value, :context), do: {:ok, Map.put(map, vertex, value)}
-  defp update_internal_map(map, vertex, value, location) do
-    with {:ok, context} <- Map.fetch(map, vertex) do
-      context = update_internal_context(context, value, location)
-      map = Map.put(map, vertex, context)
-      {:ok, map}
-    else
-      _error -> :error
-    end
-  end
-
-  # Updates an element within internal context.
-  @spec update_internal_context(icontext, term, :predecessors | :label | :successors) :: icontext
-  defp update_internal_context(context, value, location)
-  defp update_internal_context({predecessors, _label, successors}, label, :label) do
-    {predecessors, label, successors}
-  end
-  defp update_internal_context({predecessors, label, successors}, {target, target_labels}, :successors) do
-    successors = update_internal_adjacents(successors, target, target_labels)
-    {predecessors, label, successors}
-  end
-  defp update_internal_context({predecessors, label, successors}, {source, source_labels}, :predecessors) do
-    predecessors = update_internal_adjacents(predecessors, source, source_labels)
-    {predecessors, label, successors}
-  end
-
-  # Updates internal adjacent with a new edge.
-  @spec update_internal_adjacents(iadj, vertex, label) :: iadj
-  defp update_internal_adjacents(internal_adjacents, vertex, labels) do
-      Map.update(internal_adjacents, vertex, labels, &Enum.concat(&1, labels))
+  def insert_edge(%Graph{internal: graph}, edge) do
+    Internal.insert_edge(graph, edge)
+    |> wrap_fallible(1)
   end
 
   @doc """
-  Decomposes the graph into a context containing vertex and the remaining graph.
+  Decomposes `graph` into the context containing `vertex` and the remaining
+  graph.
 
   ## Examples
 
       iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
       iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
       iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> {:ok, context1, graph} = InductiveGraph.decompose_by_vertex(graph, 3)
+      iex> {:ok, context1, graph} = InductiveGraph.decompose(graph, 3)
       iex> context1
       {[{"down", 2}], 3, "c", [{"up", 1}]}
-      iex> {:ok, context2, graph} = InductiveGraph.decompose_by_vertex(graph, 2)
+      iex> {:ok, context2, graph} = InductiveGraph.decompose(graph, 2)
       iex> context2
       {[{"right", 1}], 2, "b", [{"left", 1}]}
-      iex> {:ok, context3, graph} = InductiveGraph.decompose_by_vertex(graph, 1)
+      iex> {:ok, context3, graph} = InductiveGraph.decompose(graph, 1)
       iex> context3
       {[], 1, "a", []}
       iex> InductiveGraph.empty?(graph)
       true
 
   """
-  @spec decompose_by_vertex(t, vertex) :: {:ok, context, t} | :error
-  def decompose_by_vertex(graph, vertex)
-  def decompose_by_vertex(%Graph{internal: map}, vertex) do
-    with {:ok, {predecessors, label, successors}} <- Map.fetch(map, vertex) do
-      vertex_removed_map = Map.delete(map, vertex)
-
-      vertex_removed_predecessors = Map.delete(predecessors, vertex)
-      vertex_removed_predecessors_keys = Map.keys(vertex_removed_predecessors)
-      vertex_removed_map = remove_vertex_from_internal_adjacents(vertex_removed_map, vertex, vertex_removed_predecessors_keys, :successors)
-
-      vertex_removed_successors = Map.delete(successors, vertex)
-      vertex_removed_successors_keys = Map.keys(vertex_removed_successors)
-      vertex_removed_map = remove_vertex_from_internal_adjacents(vertex_removed_map, vertex, vertex_removed_successors_keys, :predecessors)
-
-      predecessors = convert_to_adjacents(vertex_removed_predecessors)
-      successors = convert_to_adjacents(successors)
-
-      {:ok, {predecessors, vertex, label, successors}, %Graph{internal: vertex_removed_map}}
-    else
-      _error -> :error
-    end
-  end
-
-  # Removes vertex from internal context's predecessors or successors field for
-  # every target vertex.
-  @spec remove_vertex_from_internal_adjacents(igraph, vertex, [vertex], :predecessors | :successors) :: igraph
-  defp remove_vertex_from_internal_adjacents(map, vertex, target_vertices, adjacents_type)
-  defp remove_vertex_from_internal_adjacents(map, _vertex, [], _adjacents_type), do: map
-  defp remove_vertex_from_internal_adjacents(map, vertex, [target_vertex | target_vertices], adjacents_type) do
-    {predecessors, label, successors} = Map.fetch!(map, target_vertex)
-    context =
-      case adjacents_type do
-        :predecessors -> {Map.delete(predecessors, vertex), label, successors}
-        :successors -> {predecessors, label, Map.delete(successors, vertex)}
-      end
-    map = Map.put(map, target_vertex, context)
-    remove_vertex_from_internal_adjacents(map, vertex, target_vertices, adjacents_type)
-  end
-
-  # Converts internal adjacents to adjacents.
-  @spec convert_to_adjacents(iadj) :: adj
-  defp convert_to_adjacents(map) do
-    map
-    |> Map.to_list()
-    |> Enum.flat_map(fn {key, values} -> Enum.map(values, &({&1, key})) end)
+  @spec decompose(t, vertex) :: {:ok, context, t} | :error
+  def decompose(graph, vertex)
+  def decompose(%Graph{internal: graph}, vertex) do
+    Internal.decompose(graph, vertex)
+    |> wrap_fallible(2)
   end
 
   @doc """
-  Lists all vertices in graph.
+  Lists all vertices in `graph`.
 
   ## Examples
 
@@ -318,18 +204,14 @@ defmodule InductiveGraph do
       [{1, "a"}, {2, "b"}, {3, "c"}]
 
   """
-  @spec list_vertices(t) :: [{vertex, label}]
+  @spec list_vertices(t) :: [tagged_vertex]
   def list_vertices(graph)
-  def list_vertices(%Graph{internal: map}) do
-    format = fn {vertex, {_predecessors, label, _successors}} -> {vertex, label} end
-
-    map
-    |> Map.to_list()
-    |> Enum.map(format)
+  def list_vertices(%Graph{internal: graph}) do
+    Internal.list_vertices(graph)
   end
 
   @doc """
-  Counts the number of vertices in graph.
+  Counts number of vertices in `graph`.
 
   ## Examples
 
@@ -340,12 +222,13 @@ defmodule InductiveGraph do
 
   """
   @spec count_vertices(t) :: non_neg_integer
-  def count_vertices(%Graph{internal: map}) do
-    map_size(map)
+  def count_vertices(graph)
+  def count_vertices(%Graph{internal: graph}) do
+    Internal.count_vertices(graph)
   end
 
   @doc """
-  Gets range of vertices.
+  Gets range of vertex values in `graph`.
 
   ## Examples
 
@@ -356,19 +239,37 @@ defmodule InductiveGraph do
 
   """
   @spec vertex_range(t) :: {:ok, min :: integer, max :: integer} | :error
-  def vertex_range(%Graph{internal: map}) do
-    case Map.keys(map) do
-      [] ->
-        :error
-      [vertex | vertices] ->
-        min_max = fn vertex, {minimum, maximum} -> {min(minimum, vertex), max(maximum, vertex)} end
-        {minimum, maximum} = List.foldl(vertices, {vertex, vertex}, min_max)
-        {:ok, minimum, maximum}
-    end
+  def vertex_range(graph)
+  def vertex_range(%Graph{internal: graph}) do
+    Internal.vertex_range(graph)
+  end
+
+  @doc ~S"""
+  Inserts `vertices` into `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.insert_vertices(graph, [{4, "d"}, {5, "e"}])
+      iex> InductiveGraph.pretty_print(graph, 2) <> "\n"
+      ~s'''
+      | {[], 5, "e", []}
+      & {[], 4, "d", []}
+      & InductiveGraph
+      '''
+
+  """
+  @spec insert_vertices(t, [tagged_vertex]) :: {:ok, t} | :error
+  def insert_vertices(graph, vertice)
+  def insert_vertices(%Graph{internal: graph}, vertices) do
+    Internal.insert_vertices(graph, vertices)
+    |> wrap_fallible(1)
   end
 
   @doc """
-  Inserts vertex into graph.
+  Inserts `vertex` into `graph`.
 
   ## Examples
 
@@ -376,21 +277,20 @@ defmodule InductiveGraph do
       iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
       iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
       iex> {:ok, graph} = InductiveGraph.insert_vertex(graph, {4, "d"})
-      iex> {:ok, context, _graph} = InductiveGraph.decompose_by_vertex(graph, 4)
+      iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 4)
       iex> context
       {[], 4, "d", []}
 
   """
-  @spec insert_vertex(t, {vertex, label}) :: {:ok, t} | :error
-  def insert_vertex(%Graph{internal: map}, {vertex, label}) do
-    case Map.has_key?(map, vertex) do
-      true -> :error
-      false -> {:ok, %Graph{internal: Map.put(map, vertex, {%{}, label, %{}})}}
-    end
+  @spec insert_vertex(t, tagged_vertex) :: {:ok, t} | :error
+  def insert_vertex(graph, vertex)
+  def insert_vertex(%Graph{internal: graph}, vertex) do
+    Internal.insert_vertex(graph, vertex)
+    |> wrap_fallible(1)
   end
 
   @doc """
-  Lists all edges in graph.
+  Lists all edges in `graph`.
 
   ## Examples
 
@@ -401,13 +301,10 @@ defmodule InductiveGraph do
       [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
 
   """
-  @spec list_edges(t) :: [{vertex, vertex, label}]
-  def list_edges(%Graph{internal: map}) do
-    for {source, {_predecessors, _label, successors}} <- Map.to_list(map),
-        {target, labels} <- Map.to_list(successors),
-        label <- labels do
-      {source, target, label}
-    end
+  @spec list_edges(t) :: [tagged_edge]
+  def list_edges(graph)
+  def list_edges(%Graph{internal: graph}) do
+    Internal.list_edges(graph)
   end
 
   @doc """
@@ -436,44 +333,23 @@ defmodule InductiveGraph do
   end
 
   @doc """
-  Updates graph by joining with a context.
+  Merges `context` into `graph`.
 
   ## Examples
 
       iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
       iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
       iex> {:ok, graph1} = InductiveGraph.make_graph(vertices, edges)
-      iex> {:ok, context, graph2} = InductiveGraph.decompose_by_vertex(graph1, 3)
-      iex> {:ok, graph3} = InductiveGraph.compose_context(graph2, context)
+      iex> {:ok, context, graph2} = InductiveGraph.decompose(graph1, 3)
+      iex> {:ok, graph3} = InductiveGraph.merge(graph2, context)
       iex> InductiveGraph.equal?(graph1, graph3)
       true
 
   """
-  @spec compose_context(t, context) :: {:ok, t} | :error
-  def compose_context(graph, context)
-  def compose_context(%Graph{internal: map}, {predecessors, vertex, label, successors}) do
-    internal_predecessors = convert_to_internal_adjacents(predecessors)
-    internal_successors = convert_to_internal_adjacents(successors)
-    map = Map.put(map, vertex, {internal_predecessors, label, internal_successors})
-
-    update =
-      fn
-        {adjacent_vertex, labels}, {:ok, map}, location -> update_internal_map(map, adjacent_vertex, {vertex, labels}, location)
-        _adjacents, :error, _location -> :error
-      end
-
-    with {:ok, map} <- List.foldl(Map.to_list(internal_predecessors), {:ok, map}, &update.(&1, &2, :successors)),
-         {:ok, map} <- List.foldl(Map.to_list(internal_successors), {:ok, map}, &update.(&1, &2, :predecessors)) do
-      {:ok, %Graph{internal: map}}
-    else
-      _error -> :error
-    end
-  end
-
-  # Converts adjacents to internal adjacents.
-  @spec convert_to_internal_adjacents(adj) :: iadj
-  defp convert_to_internal_adjacents(adjacents) do
-    convert = fn {label, vertex}, internal_adjacents -> update_internal_adjacents(internal_adjacents, vertex, [label]) end
-    List.foldl(adjacents, %{}, convert)
+  @spec merge(t, context) :: {:ok, t} | :error
+  def merge(graph, context)
+  def merge(%Graph{internal: graph}, context) do
+    Internal.merge(graph, context)
+    |> wrap_fallible(1)
   end
 end
