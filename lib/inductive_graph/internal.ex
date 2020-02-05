@@ -44,13 +44,20 @@ defmodule InductiveGraph.Internal do
   end
 
   @doc """
+  Adds edges with `vertex` to `adjacents`.
+  """
+  @spec add_edges_to_adjacents(adjacents, vertex, [value]) :: adjacents
+  def add_edges_to_adjacents(adjacents, vertex, values) do
+    Map.update(adjacents, vertex, values, &Enum.concat(&1, values))
+  end
+
+  @doc """
   Adds edges with `vertex` to either predecessor or successor adjacents in
   `context`.
   """
   @spec add_edges_to_context(context, vertex, [value], :predecessors | :successors) :: context
   def add_edges_to_context(context, vertex, edge_values, position) do
-    update = fn adjacents -> Map.update(adjacents, vertex, edge_values, &Enum.concat(&1, edge_values)) end
-    update_context(context, position, update)
+    update_context(context, position, &add_edges_to_adjacents(&1, vertex, edge_values))
   end
 
   @doc """
@@ -135,6 +142,33 @@ defmodule InductiveGraph.Internal do
     adjacents
     |> Map.to_list()
     |> Enum.flat_map(fn {key, values} -> Enum.map(values, &({&1, key})) end)
+  end
+
+  @doc """
+  Converts `[{value, vertex}]` to `adjacents`.
+  """
+  @spec to_adjacents(InductiveGraph.adjacents) :: adjacents
+  def to_adjacents(adjacents) do
+    convert = fn {value, vertex}, adjacents -> add_edges_to_adjacents(adjacents, vertex, [value]) end
+    List.foldl(adjacents, %{}, convert)
+  end
+
+  @doc """
+  Converts `{[{value, vertex}], vertex, value, [{value, vertex}]}` to context.
+  """
+  @spec to_context(InductiveGraph.context) :: context
+  def to_context(context)
+  def to_context({predecessors, _vertex, value, successors}) do
+    {to_adjacents(predecessors), value, to_adjacents(successors)}
+  end
+
+  @doc """
+  Converts `context` to `{[{value, vertex}], vertex, value, [{value, vertex}]}`.
+  """
+  @spec from_context(context, vertex) :: InductiveGraph.context
+  def from_context(context, vertex)
+  def from_context({predecessors, value, successors}, vertex) do
+    {from_adjacents(predecessors), vertex, value, from_adjacents(successors)}
   end
 
   @doc """
