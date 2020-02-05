@@ -5,7 +5,6 @@ defmodule InductiveGraph do
 
   alias InductiveGraph, as: Graph
   alias InductiveGraph.Internal
-  alias InductiveGraph.Utilities
 
   @opaque t :: %__MODULE__{}
   @type value :: term
@@ -17,28 +16,12 @@ defmodule InductiveGraph do
 
   defstruct [
     internal: Internal.empty_graph(),
+    vertices: []
   ]
 
   defimpl Inspect do
     def inspect(%Graph{}, _opts) do
       "#InductiveGraph<>"
-    end
-  end
-
-  # Wraps `graph` to `%InductiveGraph{}`.
-  @spec wrap(Internal.t) :: t
-  defp wrap(graph), do: %Graph{internal: graph}
-
-  # Wraps `graph` in `position` of `fallible` to `%InductiveGraph{}`.
-  #
-  # Fallible is either `:error` or an n-tuple with first element `:ok`.
-  @spec wrap_fallible(tuple | :error, non_neg_integer) :: tuple | :error
-  defp wrap_fallible(fallible, position) do
-    with true <- is_tuple(fallible),
-         :ok <- elem(fallible, 0) do
-      Utilities.tuple_update_position!(fallible, position, &wrap/1)
-    else
-      _error -> :error
     end
   end
 
@@ -63,8 +46,8 @@ defmodule InductiveGraph do
   """
   @spec pretty_print(t, integer) :: String.t
   def pretty_print(graph, count \\ -1)
-  def pretty_print(%Graph{internal: graph}, count) do
-    Internal.pretty_print(graph, count)
+  def pretty_print(%Graph{internal: internal}, count) do
+    Internal.pretty_print(internal, count)
   end
 
   @doc """
@@ -96,7 +79,8 @@ defmodule InductiveGraph do
   """
   @spec empty?(t) :: boolean
   def empty?(graph)
-  def empty?(%Graph{internal: graph}), do: Internal.empty?(graph)
+  def empty?(%Graph{vertices: []}), do: true
+  def empty?(%Graph{}), do: false
 
   @doc """
   Creates a graph from lists `vertices` and `edges`.
@@ -114,8 +98,12 @@ defmodule InductiveGraph do
   """
   @spec make_graph([tagged_vertex], [tagged_edge]) :: {:ok, t} | :error
   def make_graph(vertices, edges) do
-    Internal.make_graph(vertices, edges)
-    |> wrap_fallible(1)
+    with {:ok, internal} <- Internal.make_graph(vertices, edges) do
+      vertices = Internal.list_vertices(internal)
+      {:ok, %Graph{internal: internal, vertices: vertices}}
+    else
+      _error -> :error
+    end
   end
 
   @doc ~S"""
@@ -136,9 +124,12 @@ defmodule InductiveGraph do
   """
   @spec insert_edges(t, [tagged_edge]) :: {:ok, t} | :error
   def insert_edges(graph, edges)
-  def insert_edges(%Graph{internal: graph}, edges) do
-    Internal.insert_edges(graph, edges)
-    |> wrap_fallible(1)
+  def insert_edges(graph = %Graph{internal: internal}, edges) do
+    with {:ok, internal} <- Internal.insert_edges(internal, edges) do
+      {:ok, %{graph | internal: internal}}
+    else
+      _error -> :error
+    end
   end
 
   @doc ~S"""
@@ -159,9 +150,12 @@ defmodule InductiveGraph do
   """
   @spec insert_edge(t, tagged_edge) :: {:ok, t} | :error
   def insert_edge(graph, edge)
-  def insert_edge(%Graph{internal: graph}, edge) do
-    Internal.insert_edge(graph, edge)
-    |> wrap_fallible(1)
+  def insert_edge(graph = %Graph{internal: internal}, edge) do
+    with {:ok, internal} <- Internal.insert_edge(internal, edge) do
+      {:ok, %{graph | internal: internal}}
+    else
+      _error -> :error
+    end
   end
 
   @doc """
@@ -188,9 +182,37 @@ defmodule InductiveGraph do
   """
   @spec decompose(t, vertex) :: {:ok, context, t} | :error
   def decompose(graph, vertex)
-  def decompose(%Graph{internal: graph}, vertex) do
-    Internal.decompose(graph, vertex)
-    |> wrap_fallible(2)
+  def decompose(%Graph{internal: internal, vertices: vertices}, vertex) do
+    with {:ok, context, internal} <- Internal.decompose(internal, vertex) do
+      vertex = {vertex, elem(context, 2)}
+      vertices = List.delete(vertices, vertex)
+      {:ok, context, %Graph{internal: internal, vertices: vertices}}
+    else
+      _error -> :error
+    end
+  end
+
+  @doc """
+  Decomposes `graph` into an arbitrary context and the remaining graph.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> InductiveGraph.count_vertices(graph)
+      3
+      iex> {:ok, _context, graph} = InductiveGraph.decompose(graph)
+      iex> InductiveGraph.count_vertices(graph)
+      2
+
+  """
+  @spec decompose(t) :: {:ok, context, t} | :error
+  def decompose(graph)
+  def decompose(%Graph{vertices: []}), do: :error
+  def decompose(graph = %Graph{vertices: vertices}) do
+    [{vertex, _value} | _rest] = vertices |> Enum.sort()
+    decompose(graph, vertex)
   end
 
   @doc """
@@ -206,8 +228,8 @@ defmodule InductiveGraph do
   """
   @spec list_vertices(t) :: [tagged_vertex]
   def list_vertices(graph)
-  def list_vertices(%Graph{internal: graph}) do
-    Internal.list_vertices(graph)
+  def list_vertices(%Graph{vertices: vertices}) do
+    vertices |> Enum.sort()
   end
 
   @doc """
@@ -223,8 +245,8 @@ defmodule InductiveGraph do
   """
   @spec count_vertices(t) :: non_neg_integer
   def count_vertices(graph)
-  def count_vertices(%Graph{internal: graph}) do
-    Internal.count_vertices(graph)
+  def count_vertices(%Graph{vertices: vertices}) do
+    length(vertices)
   end
 
   @doc """
@@ -240,8 +262,8 @@ defmodule InductiveGraph do
   """
   @spec vertex_range(t) :: {:ok, min :: integer, max :: integer} | :error
   def vertex_range(graph)
-  def vertex_range(%Graph{internal: graph}) do
-    Internal.vertex_range(graph)
+  def vertex_range(%Graph{internal: internal}) do
+    Internal.vertex_range(internal)
   end
 
   @doc ~S"""
@@ -262,10 +284,14 @@ defmodule InductiveGraph do
 
   """
   @spec insert_vertices(t, [tagged_vertex]) :: {:ok, t} | :error
-  def insert_vertices(graph, vertice)
-  def insert_vertices(%Graph{internal: graph}, vertices) do
-    Internal.insert_vertices(graph, vertices)
-    |> wrap_fallible(1)
+  def insert_vertices(graph, vertices)
+  def insert_vertices(%Graph{internal: internal, vertices: vertices}, new_vertices) do
+    with {:ok, internal} <- Internal.insert_vertices(internal, new_vertices) do
+      vertices = new_vertices ++ vertices
+      {:ok, %Graph{internal: internal, vertices: vertices}}
+    else
+      _error -> :error
+    end
   end
 
   @doc """
@@ -284,9 +310,13 @@ defmodule InductiveGraph do
   """
   @spec insert_vertex(t, tagged_vertex) :: {:ok, t} | :error
   def insert_vertex(graph, vertex)
-  def insert_vertex(%Graph{internal: graph}, vertex) do
-    Internal.insert_vertex(graph, vertex)
-    |> wrap_fallible(1)
+  def insert_vertex(%Graph{internal: internal, vertices: vertices}, vertex) do
+    with {:ok, internal} <- Internal.insert_vertex(internal, vertex) do
+      vertices = [vertex | vertices]
+      {:ok, %Graph{internal: internal, vertices: vertices}}
+    else
+      _error -> :error
+    end
   end
 
   @doc """
@@ -303,8 +333,8 @@ defmodule InductiveGraph do
   """
   @spec list_edges(t) :: [tagged_edge]
   def list_edges(graph)
-  def list_edges(%Graph{internal: graph}) do
-    Internal.list_edges(graph)
+  def list_edges(%Graph{internal: internal}) do
+    Internal.list_edges(internal)
   end
 
   @doc """
@@ -325,9 +355,9 @@ defmodule InductiveGraph do
   """
   @spec equal?(t, t) :: boolean
   def equal?(graph1, graph2) do
-    vertices1 = graph1 |> InductiveGraph.list_vertices() |> Enum.sort()
+    vertices1 = Map.fetch!(graph1, :vertices) |> Enum.sort()
     edges1 = graph1 |> InductiveGraph.list_edges() |> Enum.sort()
-    vertices2 = graph2 |> InductiveGraph.list_vertices() |> Enum.sort()
+    vertices2 = Map.fetch!(graph2, :vertices) |> Enum.sort()
     edges2 = graph2 |> InductiveGraph.list_edges() |> Enum.sort()
     (vertices1 == vertices2) and (edges1 == edges2)
   end
@@ -348,8 +378,12 @@ defmodule InductiveGraph do
   """
   @spec merge(t, context) :: {:ok, t} | :error
   def merge(graph, context)
-  def merge(%Graph{internal: graph}, context) do
-    Internal.merge(graph, context)
-    |> wrap_fallible(1)
+  def merge(%Graph{internal: internal, vertices: vertices}, context = {_predecessors, vertex, value, _successors}) do
+    with {:ok, internal} <- Internal.merge(internal, context) do
+      vertices = [{vertex, value} | vertices]
+      {:ok, %Graph{internal: internal, vertices: vertices}}
+    else
+      _error -> :error
+    end
   end
 end
