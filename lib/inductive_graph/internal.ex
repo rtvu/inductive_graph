@@ -5,12 +5,17 @@ defmodule InductiveGraph.Internal do
 
   alias InductiveGraph.Utilities
 
-  @type vertex :: InductiveGraph.vertex
   @type value :: InductiveGraph.value
+  @type edge_value :: InductiveGraph.edge_value
+  @type vertex_value :: InductiveGraph.vertex_value
+  @type vertex :: InductiveGraph.vertex
+  @type neighbor :: InductiveGraph.neighbor
   @type tagged_vertex :: InductiveGraph.tagged_vertex
   @type tagged_edge :: InductiveGraph.tagged_edge
-  @type adjacents :: %{required(vertex) => [value]}
-  @type context :: {predecessors :: adjacents, value, successors :: adjacents}
+  @type adjacents :: %{required(neighbor) => [edge_value]}
+  @type predecessors :: adjacents
+  @type successors :: adjacents
+  @type context :: {predecessors, vertex_value, successors}
   @type t :: %{required(vertex) => context}
 
   @doc """
@@ -29,47 +34,47 @@ defmodule InductiveGraph.Internal do
   @doc """
   Updates `context` by `function` based on `update_type`.
   """
-  @spec update_context(context, :context | :predecessors | :value | :successors, (context -> context) | (adjacents -> adjacents) | (value -> value)) :: context
-  def update_context(context = {predecessors, value, successors}, update_type, function) do
+  @spec update_context(context, :context | :predecessors | :vertex_value | :successors, (context -> context) | (adjacents -> adjacents) | (value -> value)) :: context
+  def update_context(context = {predecessors, vertex_value, successors}, update_type, function) do
     case update_type do
       :context ->
         function.(context)
-      :value ->
-        {predecessors, function.(value), successors}
+      :vertex_value ->
+        {predecessors, function.(vertex_value), successors}
       :predecessors ->
-        {function.(predecessors), value, successors}
+        {function.(predecessors), vertex_value, successors}
       :successors ->
-        {predecessors, value, function.(successors)}
+        {predecessors, vertex_value, function.(successors)}
     end
   end
 
   @doc """
-  Adds edges with `vertex` to `adjacents`.
+  Adds `edge_values` with `neighbor` to `adjacents`.
   """
-  @spec add_edges_to_adjacents(adjacents, vertex, [value]) :: adjacents
-  def add_edges_to_adjacents(adjacents, vertex, values) do
-    Map.update(adjacents, vertex, values, &Enum.concat(&1, values))
+  @spec add_edges_to_adjacents(adjacents, neighbor, [edge_value]) :: adjacents
+  def add_edges_to_adjacents(adjacents, neighbor, edge_values) do
+    Map.update(adjacents, neighbor, edge_values, &Enum.concat(&1, edge_values))
   end
 
   @doc """
-  Adds edges with `vertex` to either predecessor or successor adjacents in
-  `context`.
+  Adds `edge_values` with `neighbor` to either predecessor or successor
+  adjacents `position` in `context`.
   """
-  @spec add_edges_to_context(context, vertex, [value], :predecessors | :successors) :: context
-  def add_edges_to_context(context, vertex, edge_values, position) do
-    update_context(context, position, &add_edges_to_adjacents(&1, vertex, edge_values))
+  @spec add_edges_to_context(context, neighbor, [edge_value], :predecessors | :successors) :: context
+  def add_edges_to_context(context, neighbor, edge_values, position) do
+    update_context(context, position, &add_edges_to_adjacents(&1, neighbor, edge_values))
   end
 
   @doc """
-  Inserts `edge` into `graph`.
+  Inserts `tagged_edge` into `graph`.
   """
-  @spec insert_edge(t, tagged_edge) :: {:ok, t} | :error
-  def insert_edge(graph, edge)
-  def insert_edge(graph, {from_vertex, to_vertex, value}) do
+  @spec insert_tagged_edge(t, tagged_edge) :: {:ok, t} | :error
+  def insert_tagged_edge(graph, tagged_edge)
+  def insert_tagged_edge(graph, {from_vertex, to_vertex, edge_value}) do
     with true <- Map.has_key?(graph, from_vertex),
          true <- Map.has_key?(graph, to_vertex),
-         {:ok, graph} <- Utilities.map_update(graph, from_vertex, &add_edges_to_context(&1, to_vertex, [value], :successors)),
-         {:ok, graph} <- Utilities.map_update(graph, to_vertex, &add_edges_to_context(&1, from_vertex, [value], :predecessors)) do
+         {:ok, graph} <- Utilities.map_update(graph, from_vertex, &add_edges_to_context(&1, to_vertex, [edge_value], :successors)),
+         {:ok, graph} <- Utilities.map_update(graph, to_vertex, &add_edges_to_context(&1, from_vertex, [edge_value], :predecessors)) do
       {:ok, graph}
     else
       _error -> :error
@@ -77,57 +82,57 @@ defmodule InductiveGraph.Internal do
   end
 
   @doc """
-  Inserts `edges` into `graph`.
+  Inserts `tagged_edges` into `graph`.
   """
-  @spec insert_edges(t, [tagged_edge]) :: {:ok, t} | :error
-  def insert_edges(graph, edges) do
+  @spec insert_tagged_edges(t, [tagged_edge]) :: {:ok, t} | :error
+  def insert_tagged_edges(graph, tagged_edges) do
     insert =
       fn
-        edge, {:ok, graph} -> insert_edge(graph, edge)
+        tagged_edge, {:ok, graph} -> insert_tagged_edge(graph, tagged_edge)
         _edge, :error -> :error
       end
 
-    List.foldl(edges, {:ok, graph}, insert)
+    List.foldl(tagged_edges, {:ok, graph}, insert)
   end
 
   @doc """
-  Creates a new context based on `value`.
+  Creates a new context based on `vertex_value`.
   """
-  @spec new_context(value) :: context
-  def new_context(value), do: {%{}, value, %{}}
+  @spec new_context(vertex_value) :: context
+  def new_context(vertex_value), do: {%{}, vertex_value, %{}}
 
   @doc """
-  Creates a graph from lists `vertices` and `edges`.
+  Creates a graph from `tagged_vertices` and `tagged_edges`.
   """
   @spec make_graph([tagged_vertex], [tagged_edge]) :: {:ok, t} | :error
-  def make_graph(vertices, edges) do
-    convert = fn {vertex, value} -> {vertex, new_context(value)} end
+  def make_graph(tagged_vertices, tagged_edges) do
+    convert = fn {vertex, vertex_value} -> {vertex, new_context(vertex_value)} end
 
-    vertices
+    tagged_vertices
     |> Stream.map(convert)
     |> Map.new()
-    |> insert_edges(edges)
+    |> insert_tagged_edges(tagged_edges)
   end
 
   @doc """
-  Removes edges with `vertex` from either predecessor or successor adjacents in
-  `context`.
+  Removes edges with `neighbor` from either predecessor or successor
+  adjacents `position` in `context`.
   """
-  @spec remove_edges_from_context(context, vertex, :predecessors | :successors) :: context
-  def remove_edges_from_context(context, vertex, position) do
-    update = &Map.delete(&1, vertex)
+  @spec remove_edges_from_context(context, neighbor, :predecessors | :successors) :: context
+  def remove_edges_from_context(context, neighbor, position) do
+    update = &Map.delete(&1, neighbor)
     update_context(context, position, update)
   end
 
   @doc """
-  Removes edges with `edge_vertex` from either predecessor or successor
-  adjacents in contexts of `vertices`.
+  Removes edges with `neighbor` from either predecessor or successor adjacents
+  `position` in contexts of `vertices`.
   """
-  @spec prune_adjacents(t, [vertex], vertex, :predecessors | :successors) :: {:ok, t} | :error
-  def prune_adjacents(graph, vertices, edge_vertex, position) do
+  @spec prune_adjacents(t, [vertex], neighbor, :predecessors | :successors) :: {:ok, t} | :error
+  def prune_adjacents(graph, vertices, neighbor, position) do
     remove =
       fn
-        vertex, {:ok, graph} -> Utilities.map_update(graph, vertex, &remove_edges_from_context(&1, edge_vertex, position))
+        vertex, {:ok, graph} -> Utilities.map_update(graph, vertex, &remove_edges_from_context(&1, neighbor, position))
         _vertex, :error -> :error
       end
 
@@ -135,40 +140,41 @@ defmodule InductiveGraph.Internal do
   end
 
   @doc """
-  Converts `adjacents` to `[{value, vertex}]`.
+  Converts `adjacents` to `[{edge_value, neighbor}]`.
   """
   @spec from_adjacents(adjacents) :: InductiveGraph.adjacents
   def from_adjacents(adjacents) do
     adjacents
     |> Map.to_list()
-    |> Enum.flat_map(fn {key, values} -> Enum.map(values, &({&1, key})) end)
+    |> Enum.flat_map(fn {neighbor, edge_values} -> Enum.map(edge_values, &({&1, neighbor})) end)
   end
 
   @doc """
-  Converts `[{value, vertex}]` to `adjacents`.
+  Converts `[{edge_value, neighbor}]` to `adjacents`.
   """
   @spec to_adjacents(InductiveGraph.adjacents) :: adjacents
   def to_adjacents(adjacents) do
-    convert = fn {value, vertex}, adjacents -> add_edges_to_adjacents(adjacents, vertex, [value]) end
+    convert = fn {edge_value, neighbor}, adjacents -> add_edges_to_adjacents(adjacents, neighbor, [edge_value]) end
     List.foldl(adjacents, %{}, convert)
   end
 
   @doc """
-  Converts `{[{value, vertex}], vertex, value, [{value, vertex}]}` to context.
+  Converts `{[{edge_value, neighbor}], vertex, vertex_value, [{edge_value, neighbor}]}`
+  to context.
   """
   @spec to_context(InductiveGraph.context) :: context
   def to_context(context)
-  def to_context({predecessors, _vertex, value, successors}) do
-    {to_adjacents(predecessors), value, to_adjacents(successors)}
+  def to_context({predecessors, _vertex, vertex_value, successors}) do
+    {to_adjacents(predecessors), vertex_value, to_adjacents(successors)}
   end
 
   @doc """
-  Converts `context` to `{[{value, vertex}], vertex, value, [{value, vertex}]}`.
+  Converts `context` to `{[{edge_value, neighbor}], vertex, vertex_value, [{edge_value, neighbor}]}`.
   """
   @spec from_context(context, vertex) :: InductiveGraph.context
   def from_context(context, vertex)
-  def from_context({predecessors, value, successors}, vertex) do
-    {from_adjacents(predecessors), vertex, value, from_adjacents(successors)}
+  def from_context({predecessors, vertex_value, successors}, vertex) do
+    {from_adjacents(predecessors), vertex, vertex_value, from_adjacents(successors)}
   end
 
   @doc """
@@ -177,7 +183,7 @@ defmodule InductiveGraph.Internal do
   """
   @spec decompose(t, vertex) :: {:ok, InductiveGraph.context, t} | :error
   def decompose(graph, vertex) do
-    with {:ok, {predecessors, value, successors}} <- Map.fetch(graph, vertex),
+    with {:ok, {predecessors, vertex_value, successors}} <- Map.fetch(graph, vertex),
          graph = Map.delete(graph, vertex),
          vertex_removed_predecessors = Map.delete(predecessors, vertex),
          {:ok, graph} <- prune_adjacents(graph, Map.keys(vertex_removed_predecessors), vertex, :successors),
@@ -185,7 +191,7 @@ defmodule InductiveGraph.Internal do
          {:ok, graph} <- prune_adjacents(graph, Map.keys(vertex_removed_successors), vertex, :predecessors) do
       predecessors = from_adjacents(vertex_removed_predecessors)
       successors = from_adjacents(successors)
-      {:ok, {predecessors, vertex, value, successors}, graph}
+      {:ok, {predecessors, vertex, vertex_value, successors}, graph}
     else
       _error -> :error
     end
@@ -194,9 +200,9 @@ defmodule InductiveGraph.Internal do
   @doc """
   Lists all vertices in `graph`.
   """
-  @spec list_vertices(t) :: [tagged_vertex]
-  def list_vertices(graph) do
-    format = fn {vertex, {_predecessors, value, _successors}} -> {vertex, value} end
+  @spec list_tagged_vertices(t) :: [tagged_vertex]
+  def list_tagged_vertices(graph) do
+    format = fn {vertex, {_predecessors, vertex_value, _successors}} -> {vertex, vertex_value} end
 
     graph
     |> Map.to_list()
@@ -212,12 +218,12 @@ defmodule InductiveGraph.Internal do
   end
 
   @doc """
-  Gets range of vertex values in `graph`.
+  Gets range of vertex in `graph`.
 
   Returns `{:ok, minimum, maximum}` for graphs with at least one vertex. Returns
   `:error` for empty graph.
   """
-  @spec vertex_range(t) :: {:ok, min :: integer, max :: integer} | :error
+  @spec vertex_range(t) :: {:ok, minimum :: integer, maximum :: integer} | :error
   def vertex_range(graph) do
     case Map.keys(graph) do
       [] ->
@@ -230,40 +236,40 @@ defmodule InductiveGraph.Internal do
   end
 
   @doc """
-  Inserts `vertices` into `graph`.
+  Inserts `tagged_vertices` into `graph`.
   """
-  @spec insert_vertices(t, [tagged_vertex]) :: {:ok, t} | :error
-  def insert_vertices(graph, vertices) do
+  @spec insert_tagged_vertices(t, [tagged_vertex]) :: {:ok, t} | :error
+  def insert_tagged_vertices(graph, tagged_vertices) do
     insert =
       fn
-        vertex, {:ok, graph} -> insert_vertex(graph, vertex)
+        tagged_vertex, {:ok, graph} -> insert_tagged_vertex(graph, tagged_vertex)
         _vertex, :error -> :error
       end
 
-    List.foldl(vertices, {:ok, graph}, insert)
+    List.foldl(tagged_vertices, {:ok, graph}, insert)
   end
 
   @doc """
-  Inserts `vertex` into `graph`.
+  Inserts `tagged_vertex` into `graph`.
   """
-  @spec insert_vertex(t, tagged_vertex) :: {:ok, t} | :error
-  def insert_vertex(graph, vertex)
-  def insert_vertex(graph, {vertex, value}) do
-    case Map.has_key?(graph, vertex) do
+  @spec insert_tagged_vertex(t, tagged_vertex) :: {:ok, t} | :error
+  def insert_tagged_vertex(graph, tagged_vertex)
+  def insert_tagged_vertex(graph, {tagged_vertex, vertex_value}) do
+    case Map.has_key?(graph, tagged_vertex) do
       true -> :error
-      false -> {:ok, Map.put(graph, vertex, new_context(value))}
+      false -> {:ok, Map.put(graph, tagged_vertex, new_context(vertex_value))}
     end
   end
 
   @doc """
-  Lists all edges in `graph`.
+  Lists all tagged edges in `graph`.
   """
-  @spec list_edges(t) :: [tagged_edge]
-  def list_edges(graph) do
-    for {from_vertex, {_predecessors, _label, successors}} <- Map.to_list(graph),
-        {to_vertex, values} <- Map.to_list(successors),
-        value <- values do
-      {from_vertex, to_vertex, value}
+  @spec list_tagged_edges(t) :: [tagged_edge]
+  def list_tagged_edges(graph) do
+    for {from_vertex, {_predecessors, _vertex_value, successors}} <- Map.to_list(graph),
+        {to_vertex, edge_values} <- Map.to_list(successors),
+        edge_value <- edge_values do
+      {from_vertex, to_vertex, edge_value}
     end
   end
 
@@ -294,18 +300,12 @@ defmodule InductiveGraph.Internal do
   """
   @spec merge(t, InductiveGraph.context) :: {:ok, t} | :error
   def merge(graph, context)
-  def merge(graph, {predecessors, vertex, value, successors}) do
-    flip =
-      fn
-        :predecessors -> :successors
-        :successors -> :predecessors
-      end
-
+  def merge(graph, {predecessors, vertex, vertex_value, successors}) do
     process =
       fn
-        {value, adjacent_vertex}, {:ok, graph, context}, position ->
-          with {:ok, graph} <- Utilities.map_update(graph, adjacent_vertex, &add_edges_to_context(&1, vertex, [value], flip.(position))) do
-            context = add_edges_to_context(context, adjacent_vertex, [value], position)
+        {vertex_value, neighbor}, {:ok, graph, context}, position ->
+          with {:ok, graph} <- Utilities.map_update(graph, neighbor, &add_edges_to_context(&1, vertex, [vertex_value], flip_adjacents_type(position))) do
+            context = add_edges_to_context(context, neighbor, [vertex_value], position)
             {:ok, graph, context}
           else
             _error -> :error
@@ -315,7 +315,7 @@ defmodule InductiveGraph.Internal do
       end
 
     with false <- Map.has_key?(graph, vertex),
-         context = new_context(value),
+         context = new_context(vertex_value),
          {:ok, graph, context} <- List.foldl(predecessors, {:ok, graph, context}, &process.(&1, &2, :predecessors)),
          {:ok, graph, context} <- List.foldl(successors, {:ok, graph, context}, &process.(&1, &2, :successors)) do
       {:ok, Map.put(graph, vertex, context)}
@@ -324,12 +324,18 @@ defmodule InductiveGraph.Internal do
     end
   end
 
+  # Flips the adjacents type.
+  @spec flip_adjacents_type(:predecessors) :: :successors
+  @spec flip_adjacents_type(:successors) :: :predecessors
+  defp flip_adjacents_type(:predecessors), do: :successors
+  defp flip_adjacents_type(:successors), do: :predecessors
+
   @doc """
   Applies `function` to `adjacents`.
   """
   @spec map_adjacents(adjacents, function) :: adjacents
   def map_adjacents(adjacents, function) do
-    Enum.into(adjacents, %{}, fn {vertex, values} -> {vertex, Enum.map(values, function)} end)
+    Enum.into(adjacents, %{}, fn {neighbor, edge_values} -> {neighbor, Enum.map(edge_values, function)} end)
   end
 
   @doc """
@@ -350,12 +356,12 @@ defmodule InductiveGraph.Internal do
   @doc """
   Applies `function` to every vertex value in `graph`.
   """
-  @spec map_vertices(t, (value -> value)) :: t
+  @spec map_vertices(t, (vertex_value -> vertex_value)) :: t
   def map_vertices(graph, function) do
     transform =
       fn
         {vertex, context} ->
-          {vertex, update_context(context, :value, function)}
+          {vertex, update_context(context, :vertex_value, function)}
       end
 
     Enum.into(graph, %{}, transform)
@@ -364,7 +370,7 @@ defmodule InductiveGraph.Internal do
   @doc """
   Applies `function` to every edge value in `graph`.
   """
-  @spec map_edges(t, (value -> value)) :: t
+  @spec map_edges(t, (edge_value -> edge_value)) :: t
   def map_edges(graph, function) do
     transform =
       fn
@@ -383,7 +389,7 @@ defmodule InductiveGraph.Internal do
   Applies `vertex_function` to every vertex value and `edge_function` to every
   edge value in `graph`.
   """
-  @spec map_vertices_and_edges(t, (value -> value), (value -> value)) :: t
+  @spec map_vertices_and_edges(t, (vertex_value -> vertex_value), (edge_value -> edge_value)) :: t
   def map_vertices_and_edges(graph, vertex_function, edge_function) do
     transform =
       fn
@@ -392,7 +398,7 @@ defmodule InductiveGraph.Internal do
             context
             |> update_context(:predecessors, &map_adjacents(&1, edge_function))
             |> update_context(:successors, &map_adjacents(&1, edge_function))
-            |> update_context(:value, vertex_function)
+            |> update_context(:vertex_value, vertex_function)
           {vertex, context}
       end
 

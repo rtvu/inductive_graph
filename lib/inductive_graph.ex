@@ -9,12 +9,17 @@ defmodule InductiveGraph do
 
   @opaque t :: %__MODULE__{}
   @type value :: term
+  @type edge_value :: value
+  @type vertex_value :: value
   @type vertex :: integer
+  @type neighbor :: vertex
   @type edge :: {from_vertex :: vertex, to_vertex :: vertex}
-  @type tagged_vertex :: {vertex, value}
-  @type tagged_edge :: {from_vertex :: vertex, to_vertex :: vertex, value}
-  @type adjacents :: [{value, vertex}]
-  @type context :: {predecessors :: adjacents, vertex, value, successors :: adjacents}
+  @type tagged_vertex :: {vertex, vertex_value}
+  @type tagged_edge :: {from_vertex :: vertex, to_vertex :: vertex, edge_value}
+  @type adjacents :: [{edge_value, neighbor}]
+  @type predecessors :: adjacents
+  @type successors :: adjacents
+  @type context :: {predecessors, vertex, vertex_value, successors}
 
   defstruct [
     internal: Internal.empty_graph(),
@@ -32,10 +37,11 @@ defmodule InductiveGraph do
 
   # Wraps `graph` in `position` of `fallible` to `%InductiveGraph{}`.
   #
-  # Fallible is either `:error` or an n-tuple with first element `:ok`.
+  # Fallible is either `:error` or an `tuple` with first element `:ok`.
   @spec wrap_fallible(tuple | :error, non_neg_integer) :: tuple | :error
   defp wrap_fallible(fallible, position) do
     with true <- is_tuple(fallible),
+         true <- position > 0,
          :ok <- elem(fallible, 0) do
       Utilities.tuple_update_position!(fallible, position, &wrap/1)
     else
@@ -50,9 +56,9 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> InductiveGraph.pretty_print(graph) <> "\n"
       ~s'''
       | {[{"down", 2}], 3, "c", [{"up", 1}]}
@@ -100,68 +106,121 @@ defmodule InductiveGraph do
   def empty?(%Graph{internal: graph}), do: Internal.empty?(graph)
 
   @doc """
-  Creates a graph from lists `vertices` and `edges`.
+  Creates a graph from lists `tagged_vertices` and `tagged_edges`.
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> InductiveGraph.list_vertices(graph) |> Enum.sort()
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> graph |> InductiveGraph.list_tagged_vertices() |> Enum.sort()
       [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> InductiveGraph.list_edges(graph) |> Enum.sort()
+      iex> graph |> InductiveGraph.list_tagged_edges() |> Enum.sort()
       [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
 
   """
   @spec make_graph([tagged_vertex], [tagged_edge]) :: {:ok, t} | :error
-  def make_graph(vertices, edges) do
-    Internal.make_graph(vertices, edges)
+  def make_graph(tagged_vertices, tagged_edges) do
+    Internal.make_graph(tagged_vertices, tagged_edges)
     |> wrap_fallible(1)
   end
 
   @doc ~S"""
-  Inserts `edges` into `graph`.
+  Inserts `tagged_edge` into `graph`.
 
   ## Examples
 
-      iex> {:ok, graph} = InductiveGraph.make_graph([{1, 1}, {2, 2}, {3, 3}], [])
-      iex> {:ok, graph} = InductiveGraph.insert_edges(graph, [{1, 2,"right"}, {3, 2, "left"}])
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}]
+      iex> new_tagged_edge = {3, 1, "up"}
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> {:ok, graph} = InductiveGraph.insert_tagged_edge(graph, new_tagged_edge)
       iex> InductiveGraph.pretty_print(graph) <> "\n"
       ~s'''
-      | {[], 3, 3, [{"left", 2}]}
-      & {[{"right", 1}], 2, 2, []}
-      & {[], 1, 1, []}
+      | {[{"down", 2}], 3, "c", [{"up", 1}]}
+      & {[{"right", 1}], 2, "b", [{"left", 1}]}
+      & {[], 1, "a", []}
       & Empty
       '''
 
   """
-  @spec insert_edges(t, [tagged_edge]) :: {:ok, t} | :error
-  def insert_edges(graph, edges)
-  def insert_edges(%Graph{internal: graph}, edges) do
-    Internal.insert_edges(graph, edges)
+  @spec insert_tagged_edge(t, tagged_edge) :: {:ok, t} | :error
+  def insert_tagged_edge(graph, tagged_edge)
+  def insert_tagged_edge(%Graph{internal: graph}, tagged_edge) do
+    Internal.insert_tagged_edge(graph, tagged_edge)
     |> wrap_fallible(1)
   end
 
   @doc ~S"""
-  Inserts `edge` into `graph`.
+  Inserts `tagged_edges` into `graph`.
 
   ## Examples
 
-      iex> {:ok, graph} = InductiveGraph.make_graph([{1, 1}, {2, 2}, {3, 3}], [{1, 2, "right"}])
-      iex> {:ok, graph} = InductiveGraph.insert_edge(graph, {3, 2, "left"})
-      iex> InductiveGraph.pretty_print(graph) <> "\n"
+  iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+  iex> tagged_edges = []
+  iex> new_tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+  iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+  iex> {:ok, graph} = InductiveGraph.insert_tagged_edges(graph, new_tagged_edges)
+  iex> InductiveGraph.pretty_print(graph) <> "\n"
+  ~s'''
+  | {[{"down", 2}], 3, "c", [{"up", 1}]}
+  & {[{"right", 1}], 2, "b", [{"left", 1}]}
+  & {[], 1, "a", []}
+  & Empty
+  '''
+
+  """
+  @spec insert_tagged_edges(t, [tagged_edge]) :: {:ok, t} | :error
+  def insert_tagged_edges(graph, tagged_edges)
+  def insert_tagged_edges(%Graph{internal: graph}, tagged_edges) do
+    Internal.insert_tagged_edges(graph, tagged_edges)
+    |> wrap_fallible(1)
+  end
+
+  @doc """
+  Inserts `tagged_vertex` into `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> new_tagged_vertex = {4, "d"}
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> {:ok, graph} = InductiveGraph.insert_tagged_vertex(graph, new_tagged_vertex)
+      iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 4)
+      iex> context
+      {[], 4, "d", []}
+
+  """
+  @spec insert_tagged_vertex(t, tagged_vertex) :: {:ok, t} | :error
+  def insert_tagged_vertex(graph, tagged_vertex)
+  def insert_tagged_vertex(%Graph{internal: graph}, tagged_vertex) do
+    Internal.insert_tagged_vertex(graph, tagged_vertex)
+    |> wrap_fallible(1)
+  end
+
+  @doc ~S"""
+  Inserts `tagged_vertices` into `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> new_tagged_vertices = [{4, "d"}, {5, "e"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> {:ok, graph} = InductiveGraph.insert_tagged_vertices(graph, new_tagged_vertices)
+      iex> InductiveGraph.pretty_print(graph, 2) <> "\n"
       ~s'''
-      | {[], 3, 3, [{"left", 2}]}
-      & {[{"right", 1}], 2, 2, []}
-      & {[], 1, 1, []}
-      & Empty
+      | {[], 5, "e", []}
+      & {[], 4, "d", []}
+      & InductiveGraph
       '''
 
   """
-  @spec insert_edge(t, tagged_edge) :: {:ok, t} | :error
-  def insert_edge(graph, edge)
-  def insert_edge(%Graph{internal: graph}, edge) do
-    Internal.insert_edge(graph, edge)
+  @spec insert_tagged_vertices(t, [tagged_vertex]) :: {:ok, t} | :error
+  def insert_tagged_vertices(graph, tagged_vertices)
+  def insert_tagged_vertices(%Graph{internal: graph}, tagged_vertices) do
+    Internal.insert_tagged_vertices(graph, tagged_vertices)
     |> wrap_fallible(1)
   end
 
@@ -171,9 +230,9 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> {:ok, context1, graph} = InductiveGraph.decompose(graph, 3)
       iex> context1
       {[{"down", 2}], 3, "c", [{"up", 1}]}
@@ -197,9 +256,9 @@ defmodule InductiveGraph do
   @doc """
   Decomposes `graph` into an arbitrary context and the remaining graph.
   ## Examples
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> InductiveGraph.count_vertices(graph)
       3
       iex> {:ok, _context, graph} = InductiveGraph.decompose(graph)
@@ -209,165 +268,8 @@ defmodule InductiveGraph do
   @spec decompose(t) :: {:ok, context, t} | :error
   def decompose(graph)
   def decompose(graph = %Graph{internal: internal}) do
-    [{vertex, _value} | _vertices] = Internal.list_vertices(internal) |> Enum.sort() |> Enum.reverse()
+    [{vertex, _vertex_value} | _tagged_vertices] = Internal.list_tagged_vertices(internal) |> Enum.sort() |> Enum.reverse()
     decompose(graph, vertex)
-  end
-
-  @doc """
-  Lists all vertices in `graph`.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, [])
-      iex> graph |> InductiveGraph.list_vertices() |> Enum.sort()
-      [{1, "a"}, {2, "b"}, {3, "c"}]
-
-  """
-  @spec list_vertices(t) :: [tagged_vertex]
-  def list_vertices(graph)
-  def list_vertices(%Graph{internal: graph}) do
-    Internal.list_vertices(graph)
-  end
-
-  @doc """
-  Counts number of vertices in `graph`.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, [])
-      iex> InductiveGraph.count_vertices(graph)
-      3
-
-  """
-  @spec count_vertices(t) :: non_neg_integer
-  def count_vertices(graph)
-  def count_vertices(%Graph{internal: graph}) do
-    Internal.count_vertices(graph)
-  end
-
-  @doc """
-  Counts number of edges in `graph`.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> graph |> InductiveGraph.count_edges()
-      4
-
-  """
-  @spec count_edges(t) :: non_neg_integer
-  def count_edges(graph)
-  def count_edges(%Graph{internal: graph}) do
-    graph |> Internal.list_edges() |> length()
-  end
-
-  @doc """
-  Gets range of vertex values in `graph`.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, [])
-      iex> InductiveGraph.vertex_range(graph)
-      {:ok, 1, 3}
-
-  """
-  @spec vertex_range(t) :: {:ok, min :: integer, max :: integer} | :error
-  def vertex_range(graph)
-  def vertex_range(%Graph{internal: graph}) do
-    Internal.vertex_range(graph)
-  end
-
-  @doc ~S"""
-  Inserts `vertices` into `graph`.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> {:ok, graph} = InductiveGraph.insert_vertices(graph, [{4, "d"}, {5, "e"}])
-      iex> InductiveGraph.pretty_print(graph, 2) <> "\n"
-      ~s'''
-      | {[], 5, "e", []}
-      & {[], 4, "d", []}
-      & InductiveGraph
-      '''
-
-  """
-  @spec insert_vertices(t, [tagged_vertex]) :: {:ok, t} | :error
-  def insert_vertices(graph, vertices)
-  def insert_vertices(%Graph{internal: graph}, vertices) do
-    Internal.insert_vertices(graph, vertices)
-    |> wrap_fallible(1)
-  end
-
-  @doc """
-  Inserts `vertex` into `graph`.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> {:ok, graph} = InductiveGraph.insert_vertex(graph, {4, "d"})
-      iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 4)
-      iex> context
-      {[], 4, "d", []}
-
-  """
-  @spec insert_vertex(t, tagged_vertex) :: {:ok, t} | :error
-  def insert_vertex(graph, vertex)
-  def insert_vertex(%Graph{internal: graph}, vertex) do
-    Internal.insert_vertex(graph, vertex)
-    |> wrap_fallible(1)
-  end
-
-  @doc """
-  Lists all edges in `graph`.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> graph |> InductiveGraph.list_edges() |> Enum.sort()
-      [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-
-  """
-  @spec list_edges(t) :: [tagged_edge]
-  def list_edges(graph)
-  def list_edges(%Graph{internal: graph}) do
-    Internal.list_edges(graph)
-  end
-
-  @doc """
-  Checks if two graphs are equal.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph1} = InductiveGraph.make_graph(vertices, [])
-      iex> {:ok, graph2} = InductiveGraph.insert_edges(graph1, edges)
-      iex> {:ok, graph3} = InductiveGraph.make_graph(vertices, edges)
-      iex> InductiveGraph.equal?(graph1, graph2)
-      false
-      iex> InductiveGraph.equal?(graph2, graph3)
-      true
-
-  """
-  @spec equal?(t, t) :: boolean
-  def equal?(graph1, graph2) do
-    vertices1 = graph1 |> list_vertices() |> Enum.sort()
-    edges1 = graph1 |> list_edges() |> Enum.sort()
-    vertices2 = graph2 |> list_vertices() |> Enum.sort()
-    edges2 = graph2 |> list_edges() |> Enum.sort()
-    (vertices1 == vertices2) and (edges1 == edges2)
   end
 
   @doc """
@@ -375,9 +277,9 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph1} = InductiveGraph.make_graph(vertices, edges)
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph1} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> {:ok, context, graph2} = InductiveGraph.decompose(graph1, 3)
       iex> {:ok, graph3} = InductiveGraph.merge(graph2, context)
       iex> InductiveGraph.equal?(graph1, graph3)
@@ -392,14 +294,144 @@ defmodule InductiveGraph do
   end
 
   @doc """
+  Lists all tagged vertices in `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, [])
+      iex> graph |> InductiveGraph.list_tagged_vertices() |> Enum.sort()
+      [{1, "a"}, {2, "b"}, {3, "c"}]
+
+  """
+  @spec list_tagged_vertices(t) :: [tagged_vertex]
+  def list_tagged_vertices(graph)
+  def list_tagged_vertices(%Graph{internal: graph}) do
+    Internal.list_tagged_vertices(graph)
+  end
+
+  @doc """
+  Counts number of vertices in `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, [])
+      iex> InductiveGraph.count_vertices(graph)
+      3
+
+  """
+  @spec count_vertices(t) :: non_neg_integer
+  def count_vertices(graph)
+  def count_vertices(%Graph{internal: graph}) do
+    Internal.count_vertices(graph)
+  end
+
+  @doc """
+  Lists all tagged edges in `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> graph |> InductiveGraph.list_tagged_edges() |> Enum.sort()
+      [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+
+  """
+  @spec list_tagged_edges(t) :: [tagged_edge]
+  def list_tagged_edges(graph)
+  def list_tagged_edges(%Graph{internal: graph}) do
+    Internal.list_tagged_edges(graph)
+  end
+
+  @doc """
+  Counts number of edges in `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> graph |> InductiveGraph.count_edges()
+      4
+
+  """
+  @spec count_edges(t) :: non_neg_integer
+  def count_edges(graph)
+  def count_edges(%Graph{internal: graph}) do
+    graph |> Internal.list_tagged_edges() |> length()
+  end
+
+  @doc """
+  Gets range of vertex values in `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, [])
+      iex> InductiveGraph.vertex_range(graph)
+      {:ok, 1, 3}
+
+  """
+  @spec vertex_range(t) :: {:ok, mininum :: integer, maximum :: integer} | :error
+  def vertex_range(graph)
+  def vertex_range(%Graph{internal: graph}) do
+    Internal.vertex_range(graph)
+  end
+
+  @doc """
+  Determines if `vertex` is in `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = []
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, edges)
+      iex> InductiveGraph.has_vertex?(graph, 3)
+      true
+      iex> InductiveGraph.has_vertex?(graph, 4)
+      false
+
+  """
+  @spec has_vertex?(t, vertex) :: boolean
+  def has_vertex?(graph, vertex)
+  def has_vertex?(%Graph{internal: graph}, vertex), do: Internal.has_vertex?(graph, vertex)
+
+  @doc """
+  Checks if two graphs are equal.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph1} = InductiveGraph.make_graph(tagged_vertices, [])
+      iex> {:ok, graph2} = InductiveGraph.insert_tagged_edges(graph1, tagged_edges)
+      iex> {:ok, graph3} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> InductiveGraph.equal?(graph1, graph2)
+      false
+      iex> InductiveGraph.equal?(graph2, graph3)
+      true
+
+  """
+  @spec equal?(t, t) :: boolean
+  def equal?(graph1, graph2) do
+    vertices1 = graph1 |> list_tagged_vertices() |> Enum.sort()
+    edges1 = graph1 |> list_tagged_edges() |> Enum.sort()
+    vertices2 = graph2 |> list_tagged_vertices() |> Enum.sort()
+    edges2 = graph2 |> list_tagged_edges() |> Enum.sort()
+    (vertices1 == vertices2) and (edges1 == edges2)
+  end
+
+  @doc """
   Applies `function` to every context in `graph`.
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> function = fn context = {_, _, value, _} -> put_elem(context, 2, String.duplicate(value, 5)) end
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> function = fn context = {_p, _v, value, _s} -> put_elem(context, 2, String.duplicate(value, 5)) end
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> graph = InductiveGraph.map_graph(graph, function)
       iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 3)
       iex> context
@@ -418,17 +450,17 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
       iex> function = &String.duplicate(&1, 5)
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> graph = InductiveGraph.map_vertices(graph, function)
       iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 3)
       iex> context
       {[{"down", 2}], 3, "ccccc", [{"up", 1}]}
 
   """
-  @spec map_vertices(t, (value -> value)) :: t
+  @spec map_vertices(t, (vertex_value -> vertex_value)) :: t
   def map_vertices(graph, function)
   def map_vertices(%Graph{internal: graph}, function) do
     Internal.map_vertices(graph, function)
@@ -440,17 +472,17 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
       iex> function = &String.reverse(&1)
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> graph = InductiveGraph.map_edges(graph, function)
       iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 3)
       iex> context
       {[{"nwod", 2}], 3, "c", [{"pu", 1}]}
 
   """
-  @spec map_edges(t, (value -> value)) :: t
+  @spec map_edges(t, (edge_value -> edge_value)) :: t
   def map_edges(graph, function)
   def map_edges(%Graph{internal: graph}, function) do
     Internal.map_edges(graph, function)
@@ -463,18 +495,18 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
       iex> vertex_function = &String.duplicate(&1, 5)
       iex> edge_function = &String.reverse(&1)
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> graph = InductiveGraph.map_vertices_and_edges(graph, vertex_function, edge_function)
       iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 3)
       iex> context
       {[{"nwod", 2}], 3, "ccccc", [{"pu", 1}]}
 
   """
-  @spec map_vertices_and_edges(t, (value -> value), (value -> value)) :: t
+  @spec map_vertices_and_edges(t, (vertex_value -> vertex_value), (edge_value -> edge_value)) :: t
   def map_vertices_and_edges(graph, vertex_function, edge_function)
   def map_vertices_and_edges(%Graph{internal: graph}, vertex_function, edge_function) do
     Internal.map_vertices_and_edges(graph, vertex_function, edge_function)
@@ -482,24 +514,26 @@ defmodule InductiveGraph do
   end
 
   @doc """
-  Folds `function` over `graph`.
+  Folds `function` over `graph` with starting value `accumulator`.
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> function = fn {_, vertex, _, _}, result -> vertex + result end
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> function = fn {_p, vertex, _v, _s}, result -> vertex + result end
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> InductiveGraph.unordered_fold(graph, 0, function)
       6
 
   """
   @spec unordered_fold(t, term, (context, term -> term)) :: term
   def unordered_fold(graph, accumulator, function) do
-    vertices = graph |> list_vertices() |> Enum.map(fn {vertex, _value} -> vertex end)
+    get_vertex = fn {vertex, _vertex_value} -> vertex end
+    vertices = graph |> list_tagged_vertices() |> Enum.map(get_vertex)
     unordered_fold(graph, accumulator, function, vertices)
   end
 
+  # Folds `function` over `graph` with starting value `accumulator`.
   @spec unordered_fold(t, term, (context, term -> term), [vertex]) :: term
   defp unordered_fold(_graph, accumulator, _function, []), do: accumulator
   defp unordered_fold(graph, accumulator, function, [vertex | vertices]) do
@@ -509,31 +543,13 @@ defmodule InductiveGraph do
   end
 
   @doc """
-  Determines if `vertex` is in `graph`.
-
-  ## Examples
-
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = []
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> InductiveGraph.has_vertex?(graph, 3)
-      true
-      iex> InductiveGraph.has_vertex?(graph, 4)
-      false
-
-  """
-  @spec has_vertex?(t, vertex) :: boolean
-  def has_vertex?(graph, vertex)
-  def has_vertex?(%Graph{internal: graph}, vertex), do: Internal.has_vertex?(graph, vertex)
-
-  @doc """
   Deletes `vertex` from `graph`.
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> {:ok, graph} = InductiveGraph.delete_vertex(graph, 3)
       iex> InductiveGraph.has_vertex?(graph, 3)
       false
@@ -553,9 +569,9 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
       iex> {:ok, graph} = InductiveGraph.delete_vertices(graph, [2, 3])
       iex> InductiveGraph.has_vertex?(graph, 3)
       false
@@ -577,10 +593,11 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> {:ok, graph} = InductiveGraph.delete_edge(graph, {1, 2})
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> edge = {1, 2}
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> {:ok, graph} = InductiveGraph.delete_edge(graph, edge)
       iex> InductiveGraph.pretty_print(graph) <> "\n"
       ~s'''
       | {[{"down", 2}], 3, "c", [{"up", 1}]}
@@ -593,13 +610,13 @@ defmodule InductiveGraph do
   @spec delete_edge(t, edge) :: {:ok, t} | :error
   def delete_edge(graph, edge)
   def delete_edge(graph, {from_vertex, to_vertex}) do
-    predicate = fn {_value, vertex} -> vertex == to_vertex end
+    predicate = fn {_edge_value, neighbor} -> neighbor == to_vertex end
     with true <- has_vertex?(graph, from_vertex),
          true <- has_vertex?(graph, to_vertex),
          {:ok, context, graph} <- decompose(graph, from_vertex),
-         {predecessors, vertex, value, successors} = context,
+         {predecessors, vertex, vertex_value, successors} = context,
          successors = Enum.reject(successors, predicate),
-         context = {predecessors, vertex, value, successors} do
+         context = {predecessors, vertex, vertex_value, successors} do
       merge(graph, context)
     else
       _error -> :error
@@ -611,10 +628,11 @@ defmodule InductiveGraph do
 
   ## Examples
 
-      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
-      iex> {:ok, graph} = InductiveGraph.delete_edges(graph, [{1, 2}, {2, 1}])
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> edges = [{1, 2}, {2, 1}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> {:ok, graph} = InductiveGraph.delete_edges(graph, edges)
       iex> InductiveGraph.pretty_print(graph) <> "\n"
       ~s'''
       | {[{"down", 2}], 3, "c", [{"up", 1}]}
