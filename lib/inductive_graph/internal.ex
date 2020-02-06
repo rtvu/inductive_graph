@@ -398,4 +398,10 @@ defmodule InductiveGraph.Internal do
 
     Enum.into(graph, %{}, transform)
   end
+
+  @doc """
+  Determines if `vertex` is in `graph`.
+  """
+  @spec has_vertex?(t, vertex) :: boolean
+  def has_vertex?(graph, vertex), do: Map.has_key?(graph, vertex)
 end

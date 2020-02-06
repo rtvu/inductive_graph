@@ -10,6 +10,7 @@ defmodule InductiveGraph do
   @opaque t :: %__MODULE__{}
   @type value :: term
   @type vertex :: integer
+  @type edge :: {from_vertex :: vertex, to_vertex :: vertex}
   @type tagged_vertex :: {vertex, value}
   @type tagged_edge :: {from_vertex :: vertex, to_vertex :: vertex, value}
   @type adjacents :: [{value, vertex}]
@@ -505,5 +506,132 @@ defmodule InductiveGraph do
     {:ok, context, graph} = decompose(graph, vertex)
     accumulator = function.(context, accumulator)
     unordered_fold(graph, accumulator, function, vertices)
+  end
+
+  @doc """
+  Determines if `vertex` is in `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = []
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> InductiveGraph.has_vertex?(graph, 3)
+      true
+      iex> InductiveGraph.has_vertex?(graph, 4)
+      false
+
+  """
+  @spec has_vertex?(t, vertex) :: boolean
+  def has_vertex?(graph, vertex)
+  def has_vertex?(%Graph{internal: graph}, vertex), do: Internal.has_vertex?(graph, vertex)
+
+  @doc """
+  Deletes `vertex` from `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.delete_vertex(graph, 3)
+      iex> InductiveGraph.has_vertex?(graph, 3)
+      false
+
+  """
+  @spec delete_vertex(t, vertex) :: {:ok, t} | :error
+  def delete_vertex(graph, vertex) do
+    with {:ok, _context, graph} <- decompose(graph, vertex) do
+      {:ok, graph}
+    else
+      _error -> :error
+    end
+  end
+
+  @doc """
+  Deletes `vertices` from `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.delete_vertices(graph, [2, 3])
+      iex> InductiveGraph.has_vertex?(graph, 3)
+      false
+
+  """
+  @spec delete_vertices(t, [vertex]) :: {:ok, t} | :error
+  def delete_vertices(graph, vertices) do
+    delete =
+      fn
+        vertex, {:ok, graph} -> delete_vertex(graph, vertex)
+        _vertex, :error -> :error
+      end
+
+    List.foldl(vertices, {:ok, graph}, delete)
+  end
+
+  @doc ~S"""
+  Deletes `edge` from `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.delete_edge(graph, {1, 2})
+      iex> InductiveGraph.pretty_print(graph) <> "\n"
+      ~s'''
+      | {[{"down", 2}], 3, "c", [{"up", 1}]}
+      & {[], 2, "b", [{"left", 1}]}
+      & {[], 1, "a", []}
+      & Empty
+      '''
+
+  """
+  @spec delete_edge(t, edge) :: {:ok, t} | :error
+  def delete_edge(graph, edge)
+  def delete_edge(graph, {from_vertex, to_vertex}) do
+    predicate = fn {_value, vertex} -> vertex == to_vertex end
+    with true <- has_vertex?(graph, from_vertex),
+         true <- has_vertex?(graph, to_vertex),
+         {:ok, context, graph} <- decompose(graph, from_vertex),
+         {predecessors, vertex, value, successors} = context,
+         successors = Enum.reject(successors, predicate),
+         context = {predecessors, vertex, value, successors} do
+      merge(graph, context)
+    else
+      _error -> :error
+    end
+  end
+
+  @doc ~S"""
+  Deletes `edges` from `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> {:ok, graph} = InductiveGraph.delete_edges(graph, [{1, 2}, {2, 1}])
+      iex> InductiveGraph.pretty_print(graph) <> "\n"
+      ~s'''
+      | {[{"down", 2}], 3, "c", [{"up", 1}]}
+      & {[], 2, "b", []}
+      & {[], 1, "a", []}
+      & Empty
+      '''
+
+  """
+  @spec delete_edges(t, [edge]) :: {:ok, t} | :error
+  def delete_edges(graph, edges) do
+    delete =
+      fn
+        edge, {:ok, graph} -> delete_edge(graph, edge)
+        _vertex, :error -> :error
+      end
+
+    List.foldl(edges, {:ok, graph}, delete)
   end
 end
