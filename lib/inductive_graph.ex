@@ -299,7 +299,7 @@ defmodule InductiveGraph do
 
   """
   @spec insert_vertices(t, [tagged_vertex]) :: {:ok, t} | :error
-  def insert_vertices(graph, vertice)
+  def insert_vertices(graph, vertices)
   def insert_vertices(%Graph{internal: graph}, vertices) do
     Internal.insert_vertices(graph, vertices)
     |> wrap_fallible(1)
@@ -362,10 +362,10 @@ defmodule InductiveGraph do
   """
   @spec equal?(t, t) :: boolean
   def equal?(graph1, graph2) do
-    vertices1 = graph1 |> InductiveGraph.list_vertices() |> Enum.sort()
-    edges1 = graph1 |> InductiveGraph.list_edges() |> Enum.sort()
-    vertices2 = graph2 |> InductiveGraph.list_vertices() |> Enum.sort()
-    edges2 = graph2 |> InductiveGraph.list_edges() |> Enum.sort()
+    vertices1 = graph1 |> list_vertices() |> Enum.sort()
+    edges1 = graph1 |> list_edges() |> Enum.sort()
+    vertices2 = graph2 |> list_vertices() |> Enum.sort()
+    edges2 = graph2 |> list_edges() |> Enum.sort()
     (vertices1 == vertices2) and (edges1 == edges2)
   end
 
