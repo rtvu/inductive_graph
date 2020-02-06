@@ -247,6 +247,24 @@ defmodule InductiveGraph do
   end
 
   @doc """
+  Counts number of edges in `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> graph |> InductiveGraph.count_edges()
+      4
+
+  """
+  @spec count_edges(t) :: non_neg_integer
+  def count_edges(graph)
+  def count_edges(%Graph{internal: graph}) do
+    graph |> Internal.list_edges() |> length()
+  end
+
+  @doc """
   Gets range of vertex values in `graph`.
 
   ## Examples
@@ -460,5 +478,32 @@ defmodule InductiveGraph do
   def map_vertices_and_edges(%Graph{internal: graph}, vertex_function, edge_function) do
     Internal.map_vertices_and_edges(graph, vertex_function, edge_function)
     |> wrap()
+  end
+
+  @doc """
+  Folds `function` over `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> function = fn {_, vertex, _, _}, result -> vertex + result end
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> InductiveGraph.unordered_fold(graph, 0, function)
+      6
+
+  """
+  @spec unordered_fold(t, term, (context, term -> term)) :: term
+  def unordered_fold(graph, accumulator, function) do
+    vertices = graph |> list_vertices() |> Enum.map(fn {vertex, _value} -> vertex end)
+    unordered_fold(graph, accumulator, function, vertices)
+  end
+
+  @spec unordered_fold(t, term, (context, term -> term), [vertex]) :: term
+  defp unordered_fold(_graph, accumulator, _function, []), do: accumulator
+  defp unordered_fold(graph, accumulator, function, [vertex | vertices]) do
+    {:ok, context, graph} = decompose(graph, vertex)
+    accumulator = function.(context, accumulator)
+    unordered_fold(graph, accumulator, function, vertices)
   end
 end
