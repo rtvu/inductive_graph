@@ -323,4 +323,79 @@ defmodule InductiveGraph.Internal do
       _error -> :error
     end
   end
+
+  @doc """
+  Applies `function` to `adjacents`.
+  """
+  @spec map_adjacents(adjacents, function) :: adjacents
+  def map_adjacents(adjacents, function) do
+    Enum.into(adjacents, %{}, fn {vertex, values} -> {vertex, Enum.map(values, function)} end)
+  end
+
+  @doc """
+  Applies `function` to every context in `graph`.
+  """
+  @spec map_graph(t, (InductiveGraph.context -> InductiveGraph.context)) :: t
+  def map_graph(graph, function) do
+    transform =
+      fn
+        {vertex, context} ->
+          context = context |> from_context(vertex) |> function.() |> to_context()
+          {vertex, context}
+      end
+
+    Enum.into(graph, %{}, transform)
+  end
+
+  @doc """
+  Applies `function` to every vertex value in `graph`.
+  """
+  @spec map_vertices(t, (value -> value)) :: t
+  def map_vertices(graph, function) do
+    transform =
+      fn
+        {vertex, context} ->
+          {vertex, update_context(context, :value, function)}
+      end
+
+    Enum.into(graph, %{}, transform)
+  end
+
+  @doc """
+  Applies `function` to every edge value in `graph`.
+  """
+  @spec map_edges(t, (value -> value)) :: t
+  def map_edges(graph, function) do
+    transform =
+      fn
+        {vertex, context} ->
+          context =
+            context
+            |> update_context(:predecessors, &map_adjacents(&1, function))
+            |> update_context(:successors, &map_adjacents(&1, function))
+          {vertex, context}
+      end
+
+    Enum.into(graph, %{}, transform)
+  end
+
+  @doc """
+  Applies `vertex_function` to every vertex value and `edge_function` to every
+  edge value in `graph`.
+  """
+  @spec map_vertices_and_edges(t, (value -> value), (value -> value)) :: t
+  def map_vertices_and_edges(graph, vertex_function, edge_function) do
+    transform =
+      fn
+        {vertex, context} ->
+          context =
+            context
+            |> update_context(:predecessors, &map_adjacents(&1, edge_function))
+            |> update_context(:successors, &map_adjacents(&1, edge_function))
+            |> update_context(:value, vertex_function)
+          {vertex, context}
+      end
+
+    Enum.into(graph, %{}, transform)
+  end
 end

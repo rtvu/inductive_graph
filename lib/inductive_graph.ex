@@ -194,6 +194,25 @@ defmodule InductiveGraph do
   end
 
   @doc """
+  Decomposes `graph` into an arbitrary context and the remaining graph.
+  ## Examples
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> InductiveGraph.count_vertices(graph)
+      3
+      iex> {:ok, _context, graph} = InductiveGraph.decompose(graph)
+      iex> InductiveGraph.count_vertices(graph)
+      2
+  """
+  @spec decompose(t) :: {:ok, context, t} | :error
+  def decompose(graph)
+  def decompose(graph = %Graph{internal: internal}) do
+    [{vertex, _value} | _vertices] = Internal.list_vertices(internal) |> Enum.sort() |> Enum.reverse()
+    decompose(graph, vertex)
+  end
+
+  @doc """
   Lists all vertices in `graph`.
 
   ## Examples
@@ -351,5 +370,95 @@ defmodule InductiveGraph do
   def merge(%Graph{internal: graph}, context) do
     Internal.merge(graph, context)
     |> wrap_fallible(1)
+  end
+
+  @doc """
+  Applies `function` to every context in `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> function = fn context = {_, _, value, _} -> put_elem(context, 2, String.duplicate(value, 5)) end
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> graph = InductiveGraph.map_graph(graph, function)
+      iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 3)
+      iex> context
+      {[{"down", 2}], 3, "ccccc", [{"up", 1}]}
+
+  """
+  @spec map_graph(t, (context -> context)) :: t
+  def map_graph(graph, function)
+  def map_graph(%Graph{internal: graph}, function) do
+    Internal.map_graph(graph, function)
+    |> wrap()
+  end
+
+  @doc """
+  Applies `function` to every vertex value in `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> function = &String.duplicate(&1, 5)
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> graph = InductiveGraph.map_vertices(graph, function)
+      iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 3)
+      iex> context
+      {[{"down", 2}], 3, "ccccc", [{"up", 1}]}
+
+  """
+  @spec map_vertices(t, (value -> value)) :: t
+  def map_vertices(graph, function)
+  def map_vertices(%Graph{internal: graph}, function) do
+    Internal.map_vertices(graph, function)
+    |> wrap()
+  end
+
+  @doc """
+  Applies `function` to every edge value in `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> function = &String.reverse(&1)
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> graph = InductiveGraph.map_edges(graph, function)
+      iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 3)
+      iex> context
+      {[{"nwod", 2}], 3, "c", [{"pu", 1}]}
+
+  """
+  @spec map_edges(t, (value -> value)) :: t
+  def map_edges(graph, function)
+  def map_edges(%Graph{internal: graph}, function) do
+    Internal.map_edges(graph, function)
+    |> wrap()
+  end
+
+  @doc """
+  Applies `vertex_function` to every vertex value and `edge_function` to every
+  edge value in `graph`.
+
+  ## Examples
+
+      iex> vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> vertex_function = &String.duplicate(&1, 5)
+      iex> edge_function = &String.reverse(&1)
+      iex> {:ok, graph} = InductiveGraph.make_graph(vertices, edges)
+      iex> graph = InductiveGraph.map_vertices_and_edges(graph, vertex_function, edge_function)
+      iex> {:ok, context, _graph} = InductiveGraph.decompose(graph, 3)
+      iex> context
+      {[{"nwod", 2}], 3, "ccccc", [{"pu", 1}]}
+
+  """
+  @spec map_vertices_and_edges(t, (value -> value), (value -> value)) :: t
+  def map_vertices_and_edges(graph, vertex_function, edge_function)
+  def map_vertices_and_edges(%Graph{internal: graph}, vertex_function, edge_function) do
+    Internal.map_vertices_and_edges(graph, vertex_function, edge_function)
+    |> wrap()
   end
 end
