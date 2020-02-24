@@ -68,6 +68,7 @@ defmodule InductiveGraph do
       '''
 
   """
+  @doc inspection: true
   @spec pretty_print(t, integer) :: String.t
   def pretty_print(graph, count \\ -1)
   def pretty_print(%Graph{internal: graph}, count) do
@@ -85,6 +86,7 @@ defmodule InductiveGraph do
       "| Empty"
 
   """
+  @doc construction: true
   @spec empty_graph() :: t
   def empty_graph(), do: %Graph{}
 
@@ -101,6 +103,7 @@ defmodule InductiveGraph do
       false
 
   """
+  @doc inspection: true
   @spec empty?(t) :: boolean
   def empty?(graph)
   def empty?(%Graph{internal: graph}), do: Internal.empty?(graph)
@@ -119,6 +122,7 @@ defmodule InductiveGraph do
       [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
 
   """
+  @doc construction: true
   @spec make_graph([tagged_vertex], [tagged_edge]) :: {:ok, t} | :error
   def make_graph(tagged_vertices, tagged_edges) do
     Internal.make_graph(tagged_vertices, tagged_edges)
@@ -144,6 +148,7 @@ defmodule InductiveGraph do
       '''
 
   """
+  @doc construction: true
   @spec insert_tagged_edge(t, tagged_edge) :: {:ok, t} | :error
   def insert_tagged_edge(graph, tagged_edge)
   def insert_tagged_edge(%Graph{internal: graph}, tagged_edge) do
@@ -170,6 +175,7 @@ defmodule InductiveGraph do
   '''
 
   """
+  @doc construction: true
   @spec insert_tagged_edges(t, [tagged_edge]) :: {:ok, t} | :error
   def insert_tagged_edges(graph, tagged_edges)
   def insert_tagged_edges(%Graph{internal: graph}, tagged_edges) do
@@ -192,6 +198,7 @@ defmodule InductiveGraph do
       {[], 4, "d", []}
 
   """
+  @doc construction: true
   @spec insert_tagged_vertex(t, tagged_vertex) :: {:ok, t} | :error
   def insert_tagged_vertex(graph, tagged_vertex)
   def insert_tagged_vertex(%Graph{internal: graph}, tagged_vertex) do
@@ -217,6 +224,7 @@ defmodule InductiveGraph do
       '''
 
   """
+  @doc construction: true
   @spec insert_tagged_vertices(t, [tagged_vertex]) :: {:ok, t} | :error
   def insert_tagged_vertices(graph, tagged_vertices)
   def insert_tagged_vertices(%Graph{internal: graph}, tagged_vertices) do
@@ -246,6 +254,7 @@ defmodule InductiveGraph do
       true
 
   """
+  @doc destruction: true
   @spec decompose(t, vertex) :: {:ok, context, t} | :error
   def decompose(graph, vertex)
   def decompose(%Graph{internal: graph}, vertex) do
@@ -265,6 +274,7 @@ defmodule InductiveGraph do
       iex> InductiveGraph.count_vertices(graph)
       2
   """
+  @doc destruction: true
   @spec decompose(t) :: {:ok, context, t} | :error
   def decompose(graph)
   def decompose(graph = %Graph{internal: internal}) do
@@ -286,6 +296,7 @@ defmodule InductiveGraph do
       true
 
   """
+  @doc construction: true
   @spec merge(t, context) :: {:ok, t} | :error
   def merge(graph, context)
   def merge(%Graph{internal: graph}, context) do
@@ -304,6 +315,7 @@ defmodule InductiveGraph do
       [{1, "a"}, {2, "b"}, {3, "c"}]
 
   """
+  @doc inspection: true
   @spec list_tagged_vertices(t) :: [tagged_vertex]
   def list_tagged_vertices(graph)
   def list_tagged_vertices(%Graph{internal: graph}) do
@@ -321,6 +333,7 @@ defmodule InductiveGraph do
       3
 
   """
+  @doc inspection: true
   @spec count_vertices(t) :: non_neg_integer
   def count_vertices(graph)
   def count_vertices(%Graph{internal: graph}) do
@@ -339,6 +352,7 @@ defmodule InductiveGraph do
       [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
 
   """
+  @doc inspection: true
   @spec list_tagged_edges(t) :: [tagged_edge]
   def list_tagged_edges(graph)
   def list_tagged_edges(%Graph{internal: graph}) do
@@ -357,6 +371,7 @@ defmodule InductiveGraph do
       4
 
   """
+  @doc inspection: true
   @spec count_edges(t) :: non_neg_integer
   def count_edges(graph)
   def count_edges(%Graph{internal: graph}) do
@@ -374,6 +389,7 @@ defmodule InductiveGraph do
       {:ok, 1, 3}
 
   """
+  @doc inspection: true
   @spec vertex_range(t) :: {:ok, mininum :: integer, maximum :: integer} | :error
   def vertex_range(graph)
   def vertex_range(%Graph{internal: graph}) do
@@ -394,6 +410,7 @@ defmodule InductiveGraph do
       false
 
   """
+  @doc inspection: true
   @spec has_vertex?(t, vertex) :: boolean
   def has_vertex?(graph, vertex)
   def has_vertex?(%Graph{internal: graph}, vertex), do: Internal.has_vertex?(graph, vertex)
@@ -414,6 +431,7 @@ defmodule InductiveGraph do
       true
 
   """
+  @doc inspection: true
   @spec equal?(t, t) :: boolean
   def equal?(graph1, graph2) do
     vertices1 = graph1 |> list_tagged_vertices() |> Enum.sort()
@@ -438,6 +456,7 @@ defmodule InductiveGraph do
       {[{"down", 2}], 3, "ccccc", [{"up", 1}]}
 
   """
+  @doc update: true
   @spec map_graph(t, (context -> context)) :: t
   def map_graph(graph, function)
   def map_graph(%Graph{internal: graph}, function) do
@@ -460,6 +479,7 @@ defmodule InductiveGraph do
       {[{"down", 2}], 3, "ccccc", [{"up", 1}]}
 
   """
+  @doc update: true
   @spec map_vertices(t, (vertex_value -> vertex_value)) :: t
   def map_vertices(graph, function)
   def map_vertices(%Graph{internal: graph}, function) do
@@ -482,6 +502,7 @@ defmodule InductiveGraph do
       {[{"nwod", 2}], 3, "c", [{"pu", 1}]}
 
   """
+  @doc update: true
   @spec map_edges(t, (edge_value -> edge_value)) :: t
   def map_edges(graph, function)
   def map_edges(%Graph{internal: graph}, function) do
@@ -506,6 +527,7 @@ defmodule InductiveGraph do
       {[{"nwod", 2}], 3, "ccccc", [{"pu", 1}]}
 
   """
+  @doc update: true
   @spec map_vertices_and_edges(t, (vertex_value -> vertex_value), (edge_value -> edge_value)) :: t
   def map_vertices_and_edges(graph, vertex_function, edge_function)
   def map_vertices_and_edges(%Graph{internal: graph}, vertex_function, edge_function) do
@@ -526,6 +548,7 @@ defmodule InductiveGraph do
       6
 
   """
+  @doc update: true
   @spec unordered_fold(t, term, (context, term -> term)) :: term
   def unordered_fold(graph, accumulator, function) do
     get_vertex = fn {vertex, _vertex_value} -> vertex end
@@ -555,6 +578,7 @@ defmodule InductiveGraph do
       false
 
   """
+  @doc destruction: true
   @spec delete_vertex(t, vertex) :: {:ok, t} | :error
   def delete_vertex(graph, vertex) do
     with {:ok, _context, graph} <- decompose(graph, vertex) do
@@ -577,6 +601,7 @@ defmodule InductiveGraph do
       false
 
   """
+  @doc destruction: true
   @spec delete_vertices(t, [vertex]) :: {:ok, t} | :error
   def delete_vertices(graph, vertices) do
     delete =
@@ -607,6 +632,7 @@ defmodule InductiveGraph do
       '''
 
   """
+  @doc destruction: true
   @spec delete_edge(t, edge) :: {:ok, t} | :error
   def delete_edge(graph, edge)
   def delete_edge(graph, {from_vertex, to_vertex}) do
@@ -642,6 +668,7 @@ defmodule InductiveGraph do
       '''
 
   """
+  @doc destruction: true
   @spec delete_edges(t, [edge]) :: {:ok, t} | :error
   def delete_edges(graph, edges) do
     delete =
