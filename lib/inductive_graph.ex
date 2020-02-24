@@ -416,6 +416,25 @@ defmodule InductiveGraph do
   def has_vertex?(%Graph{internal: graph}, vertex), do: Internal.has_vertex?(graph, vertex)
 
   @doc """
+  Determines if `edge` is in `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> InductiveGraph.has_edge?(graph, {1, 2})
+      true
+      iex> InductiveGraph.has_edge?(graph, {1, 3})
+      false
+
+  """
+  @doc inspection: true
+  @spec has_edge?(t, edge) :: boolean
+  def has_edge?(graph, edge)
+  def has_edge?(%Graph{internal: graph}, edge), do: Internal.has_edge?(graph, edge)
+
+  @doc """
   Checks if two graphs are equal.
 
   ## Examples

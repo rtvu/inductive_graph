@@ -10,6 +10,7 @@ defmodule InductiveGraph.Internal do
   @type vertex_value :: InductiveGraph.vertex_value
   @type vertex :: InductiveGraph.vertex
   @type neighbor :: InductiveGraph.neighbor
+  @type edge :: InductiveGraph.edge
   @type tagged_vertex :: InductiveGraph.tagged_vertex
   @type tagged_edge :: InductiveGraph.tagged_edge
   @type adjacents :: %{required(neighbor) => [edge_value]}
@@ -440,4 +441,20 @@ defmodule InductiveGraph.Internal do
   @doc inspection: true
   @spec has_vertex?(t, vertex) :: boolean
   def has_vertex?(graph, vertex), do: Map.has_key?(graph, vertex)
+
+  @doc """
+  Determines if `edge` is in `graph`.
+  """
+  @doc inspection: true
+  @spec has_edge?(t, edge) :: boolean
+  def has_edge?(graph, edge)
+  def has_edge?(graph, {from_vertex, to_vertex}) do
+    with  {:ok, {_predecessors, _vertex_value, successors}} <- Map.fetch(graph, from_vertex),
+          {:ok, _edge_values} <- Map.fetch(successors, to_vertex) do
+      true
+    else
+      _error ->
+        false
+    end
+  end
 end
