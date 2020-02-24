@@ -129,6 +129,54 @@ defmodule InductiveGraph do
     |> wrap_fallible(1)
   end
 
+  @doc """
+  Builds a graph from 'contexts'.
+
+  ## Examples
+
+      iex> contexts = [{[{"down", 2}], 3, "c", [{"up", 1}]}, {[{"right", 1}], 2, "b", [{"left", 1}]}, {[], 1, "a", []}]
+      iex> {:ok, graph1} = InductiveGraph.build_graph(contexts)
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> {:ok, graph2} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> InductiveGraph.equal?(graph1, graph2)
+      true
+
+  """
+  @doc construction: true
+  @spec build_graph([context]) :: {:ok, t} | :error
+  def build_graph(contexts), do: insert_contexts(empty_graph(), contexts)
+
+  @doc """
+  Inserts `contexts` into `graph`.
+
+  ## Examples
+
+      iex> graph1 = InductiveGraph.empty_graph()
+      iex> contexts = [{[{"down", 2}], 3, "c", [{"up", 1}]}, {[{"right", 1}], 2, "b", [{"left", 1}]}, {[], 1, "a", []}]
+      iex> {:ok, graph2} = InductiveGraph.insert_contexts(graph1, contexts)
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> {:ok, graph3} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> InductiveGraph.equal?(graph2, graph3)
+      true
+
+  """
+  @doc construction: true
+  @spec insert_contexts(t, [context]) :: {:ok, t} | :error
+  def insert_contexts(graph, contexts)
+  def insert_contexts(%Graph{internal: graph}, contexts) do
+    merge =
+      fn
+        context, {:ok, graph} -> Internal.merge(graph, context)
+        _context, :error -> :error
+      end
+
+    contexts
+    |> List.foldr({:ok, graph}, merge)
+    |> wrap_fallible(1)
+  end
+
   @doc ~S"""
   Inserts `tagged_edge` into `graph`.
 
