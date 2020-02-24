@@ -657,7 +657,6 @@ defmodule InductiveGraph do
   def delete_edge(graph, {from_vertex, to_vertex}) do
     predicate = fn {_edge_value, neighbor} -> neighbor == to_vertex end
     with true <- has_vertex?(graph, from_vertex),
-         true <- has_vertex?(graph, to_vertex),
          {:ok, context, graph} <- decompose(graph, from_vertex),
          {predecessors, vertex, vertex_value, successors} = context,
          successors = Enum.reject(successors, predicate),
