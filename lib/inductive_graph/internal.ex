@@ -5,6 +5,7 @@ defmodule InductiveGraph.Internal do
 
   alias InductiveGraph.Utilities
 
+  @type t :: %{required(vertex) => context}
   @type value :: InductiveGraph.value
   @type edge_value :: InductiveGraph.edge_value
   @type vertex_value :: InductiveGraph.vertex_value
@@ -17,7 +18,6 @@ defmodule InductiveGraph.Internal do
   @type predecessors :: adjacents
   @type successors :: adjacents
   @type context :: {predecessors, vertex_value, successors}
-  @type t :: %{required(vertex) => context}
 
   @doc """
   Creates an empty graph.

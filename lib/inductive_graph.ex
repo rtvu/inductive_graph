@@ -11,7 +11,7 @@ defmodule InductiveGraph do
   @type value :: term
   @type edge_value :: value
   @type vertex_value :: value
-  @type vertex :: integer
+  @type vertex :: term
   @type neighbor :: vertex
   @type edge :: {from_vertex :: vertex, to_vertex :: vertex}
   @type tagged_vertex :: {vertex, vertex_value}
@@ -424,24 +424,6 @@ defmodule InductiveGraph do
   def count_edges(graph)
   def count_edges(%Graph{internal: graph}) do
     graph |> Internal.list_tagged_edges() |> length()
-  end
-
-  @doc """
-  Gets range of vertex values in `graph`.
-
-  ## Examples
-
-      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, [])
-      iex> InductiveGraph.vertex_range(graph)
-      {:ok, 1, 3}
-
-  """
-  @doc inspection: true
-  @spec vertex_range(t) :: {:ok, mininum :: integer, maximum :: integer} | :error
-  def vertex_range(graph)
-  def vertex_range(%Graph{internal: graph}) do
-    Internal.vertex_range(graph)
   end
 
   @doc """
