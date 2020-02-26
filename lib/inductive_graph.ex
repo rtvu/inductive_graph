@@ -130,7 +130,7 @@ defmodule InductiveGraph do
   end
 
   @doc """
-  Builds a graph from 'contexts'.
+  Builds a graph from `contexts`.
 
   ## Examples
 
@@ -628,8 +628,8 @@ defmodule InductiveGraph do
   defp unordered_fold(_graph, accumulator, _function, []), do: accumulator
   defp unordered_fold(graph, accumulator, function, [vertex | vertices]) do
     {:ok, context, graph} = decompose(graph, vertex)
-    accumulator = function.(context, accumulator)
-    unordered_fold(graph, accumulator, function, vertices)
+    accumulator = unordered_fold(graph, accumulator, function, vertices)
+    function.(context, accumulator)
   end
 
   @doc """
@@ -744,5 +744,40 @@ defmodule InductiveGraph do
       end
 
     List.foldl(edges, {:ok, graph}, delete)
+  end
+
+  @doc ~S"""
+  Filters edges based on edge values that fails `predicate` in `graph`.
+
+  ## Examples
+
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> predicate = fn edge_value -> String.length(edge_value) == 4 end
+      iex> graph = InductiveGraph.filter_edges(graph, predicate)
+      iex> InductiveGraph.pretty_print(graph) <> "\n"
+      ~s'''
+      | {[{"down", 2}], 3, "c", []}
+      & {[], 2, "b", [{"left", 1}]}
+      & {[], 1, "a", []}
+      & Empty
+      '''
+
+  """
+  @doc update: true
+  @spec filter_edges(t, (edge_value -> boolean)) :: t
+  def filter_edges(graph, predicate) do
+    filter =
+      fn
+        {predecessors, vertex, vertex_value, successors}, graph ->
+          filter = fn {edge_value, _neighbor} -> predicate.(edge_value) end
+          predecessors = Enum.filter(predecessors, filter)
+          successors = Enum.filter(successors, filter)
+          {:ok, graph} = merge(graph, {predecessors, vertex, vertex_value, successors})
+          graph
+      end
+
+    unordered_fold(graph, empty_graph(), filter)
   end
 end
