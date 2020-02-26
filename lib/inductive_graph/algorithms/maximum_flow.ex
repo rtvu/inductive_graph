@@ -25,10 +25,8 @@ defmodule InductiveGraph.Algorithms.MaximumFlow do
       |> Graph.list_tagged_edges()
       |> list_reversed_tagged_edges()
 
-    case Graph.insert_tagged_edges(graph, reversed_tagged_edges) do
-      {:ok, graph} -> {:ok, Graph.map_edges(graph, fn i -> {i, 0, i} end)}
-      _error -> :error
-    end
+    {:ok, graph} = Graph.insert_tagged_edges(graph, reversed_tagged_edges)
+    Graph.map_edges(graph, fn i -> {i, 0, i} end)
   end
 
   def update_adjacents_flow(adjacents, neighbor, flow) do
@@ -55,40 +53,59 @@ defmodule InductiveGraph.Algorithms.MaximumFlow do
   end
 
   def get_maximum_flow(graph, source, sink) do
-    graph = format_graph(graph)
-    graph = get_maximum_flow_helper(graph, source, sink)
+    graph
+    |> format_graph()
+    |> get_maximum_flow_helper(source, sink)
+    # |> Graph.filter_edges(fn {maximum_capacity, _current_flow, _residual_capcity} -> maximum_capacity != 0 end)
+    # |> Graph.map_edges(fn {maximum_capacity, current_flow, _residual_capcity} -> {current_flow, maximum_capacity} end)
   end
 
   defp get_maximum_flow_helper(graph, source, sink) do
+    nonzero_graph = Graph.filter_edges(graph, &(&1 != 0))
 
+    case find_tagged_path(nonzero_graph, source, sink) do
+      :error ->
+        graph
+
+      {:ok, tagged_path} ->
+        {path, flow} = Enum.reduce(tagged_path, {[], nil}, fn {vertex, value}, {path, mininum_value} -> {[vertex | path], mininum(value, mininum_value)} end)
+        graph = update_flow(graph, path, flow)
+        get_maximum_flow_helper(graph, source, sink)
+    end
+  end
+
+  defp mininum(left, right) do
+    case {left, right} do
+      {nil, right} -> right
+      {left, nil} -> left
+      {left, right} -> min(left, right)
+    end
   end
 
 
-
-
-  def find_path(graph, source, sink) do
-    path = [{nil, source}]
+  def find_tagged_path(graph, source, sink) do
+    path = [{source, nil}]
     queue = :queue.from_list([path])
-    find_path_helper(graph, sink, queue)
+    find_tagged_path_helper(graph, sink, queue)
   end
 
-  defp find_path_helper(graph, sink, queue) do
+  defp find_tagged_path_helper(graph, sink, queue) do
     if :queue.is_empty(queue) or Graph.empty?(graph) do
       :error
     else
       {{:value, path}, queue} = :queue.out(queue)
-      [{_next_edge_value, next_vertex | _rest_of_path] = path
+      [{next_vertex, _next_edge_value}  | _rest_of_path] = path
       if next_vertex == sink do
         {:ok, Enum.reverse(path)}
       else
         case Graph.decompose(graph, next_vertex) do
           {:ok, context, graph} ->
             {_predecessors, _vertex, _vertex_value, successors} = context
-            new_paths = Enum.map(successors, fn successor -> [successor | path] end)
+            new_paths = Enum.map(successors, fn {{max, current_flow, residual_capacity}, neighbor} -> [{neighbor, residual_capacity} | path] end)
             queue = :queue.join(queue, :queue.from_list(new_paths))
-            find_path_helper(graph, sink, queue)
+            find_tagged_path_helper(graph, sink, queue)
           :error ->
-            find_path_helper(graph, sink, queue)
+            find_tagged_path_helper(graph, sink, queue)
         end
       end
     end
