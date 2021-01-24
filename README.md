@@ -1,21 +1,11 @@
 # InductiveGraph
 
-**TODO: Add description**
+Inductive graph library implemented in Elixir.
 
-## Installation
+This library is a port of the [Haskell Functional Graph Library](https://hackage.haskell.org/package/fgl) based on [Martin Erwig's Paper](https://web.engr.oregonstate.edu/~erwig/papers/InductiveGraphs_JFP01.pdf).
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `inductive_graph` to your list of dependencies in `mix.exs`:
+## Development Status
 
-```elixir
-def deps do
-  [
-    {:inductive_graph, "~> 0.1.0"}
-  ]
-end
-```
+Master branch currently provides functions for construction, destruction, update, conversion, and inspection of inductive graphs.
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/inductive_graph](https://hexdocs.pm/inductive_graph).
-
+Other branches in the repository are have samples of dfs and bfs implementations and maximum flow.
