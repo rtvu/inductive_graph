@@ -209,18 +209,18 @@ defmodule InductiveGraph do
 
   ## Examples
 
-  iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
-  iex> tagged_edges = []
-  iex> new_tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
-  iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
-  iex> {:ok, graph} = InductiveGraph.insert_tagged_edges(graph, new_tagged_edges)
-  iex> InductiveGraph.pretty_print(graph) <> "\n"
-  ~s'''
-  | {[{"down", 2}], 3, "c", [{"up", 1}]}
-  & {[{"right", 1}], 2, "b", [{"left", 1}]}
-  & {[], 1, "a", []}
-  & Empty
-  '''
+      iex> tagged_vertices = [{1, "a"}, {2, "b"}, {3, "c"}]
+      iex> tagged_edges = []
+      iex> new_tagged_edges = [{1, 2, "right"}, {2, 1, "left"}, {2, 3, "down"}, {3, 1, "up"}]
+      iex> {:ok, graph} = InductiveGraph.make_graph(tagged_vertices, tagged_edges)
+      iex> {:ok, graph} = InductiveGraph.insert_tagged_edges(graph, new_tagged_edges)
+      iex> InductiveGraph.pretty_print(graph) <> "\n"
+      ~s'''
+      | {[{"down", 2}], 3, "c", [{"up", 1}]}
+      & {[{"right", 1}], 2, "b", [{"left", 1}]}
+      & {[], 1, "a", []}
+      & Empty
+      '''
 
   """
   @doc construction: true

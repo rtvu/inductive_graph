@@ -8,4 +8,4 @@ This library is an incomplete port of the [Haskell Functional Graph Library](htt
 
 Master branch currently provides functions for construction, destruction, update, conversion, and inspection of inductive graphs.
 
-Other branches in the repository have examples of dfs and bfs implementations and maximum flow.
+Other branches in the repository have examples of dfs, bfs, and maximum flow implementations.
